@@ -169,44 +169,36 @@ def alternating_qml_circuit(features, parameters):
                 
     return [qml.expval(qml.PauliZ(i)) for i in range(3)]
 
-# Draw the circuits
-demo_features = np.random.random(5)
-demo_params_layered = np.random.random(n_qubits * 4 * 3)
-demo_params_tree = np.random.random(20)
-demo_params_alt = np.random.random(n_qubits * 2 * 4)
+# Draw the circuits using representative real data values
+# Use actual feature ranges from the dataset for meaningful visualization
+demo_features = np.array([24.0, 5.0, 70.0, 0.0, 1.0])  # [time, dose, weight, conmed, other]
+demo_params_layered = np.linspace(-np.pi, np.pi, n_qubits * 4 * 3)  # Deterministic for reproducibility
+demo_params_tree = np.linspace(-np.pi/2, np.pi/2, 20)
+demo_params_alt = np.linspace(-np.pi, np.pi, n_qubits * 2 * 4)
 
 print("\n1.1 LAYERED QML ARCHITECTURE:")
 print("Features are re-uploaded at each layer for enhanced expressivity")
-try:
-    qml.drawer.use_style('pennylane')
-    fig, ax = qml.draw_mpl(layered_qml_circuit)(demo_features, demo_params_layered)
-    plt.title("Layered QML Circuit")
-    plt.tight_layout()
-    plt.show()
-except Exception as e:
-    print(f"Circuit visualization failed: {e}")
+qml.drawer.use_style('pennylane')
+fig, ax = qml.draw_mpl(layered_qml_circuit)(demo_features, demo_params_layered)
+plt.title("Layered QML Circuit")
+plt.tight_layout()
+plt.show()
 
-print("\n1.2 TREE QML ARCHITECTURE:")  
+print("\n1.2 TREE QML ARCHITECTURE:")
 print("Hierarchical processing mimics decision tree structure")
-try:
-    qml.drawer.use_style('pennylane')
-    fig, ax = qml.draw_mpl(tree_qml_circuit)(demo_features, demo_params_tree)
-    plt.title("Tree QML Circuit")
-    plt.tight_layout()
-    plt.show()
-except Exception as e:
-    print(f"Circuit visualization failed: {e}")
+qml.drawer.use_style('pennylane')
+fig, ax = qml.draw_mpl(tree_qml_circuit)(demo_features, demo_params_tree)
+plt.title("Tree QML Circuit")
+plt.tight_layout()
+plt.show()
 
 print("\n1.3 ALTERNATING QML ARCHITECTURE:")
 print("Alternates between feature encoding and quantum processing")
-try:
-    qml.drawer.use_style('pennylane')
-    fig, ax = qml.draw_mpl(alternating_qml_circuit)(demo_features, demo_params_alt)
-    plt.title("Alternating QML Circuit")
-    plt.tight_layout()
-    plt.show()
-except Exception as e:
-    print(f"Circuit visualization failed: {e}")
+qml.drawer.use_style('pennylane')
+fig, ax = qml.draw_mpl(alternating_qml_circuit)(demo_features, demo_params_alt)
+plt.title("Alternating QML Circuit")
+plt.tight_layout()
+plt.show()
 
 # ============================================================================
 # SECTION 2: DATA PREPARATION FOR QML
@@ -216,7 +208,7 @@ print("\n\n2. DATA PREPARATION FOR QUANTUM MACHINE LEARNING")
 print("-"*50)
 
 # Load and preprocess data
-loader = PKPDDataLoader("../data/EstData.csv")
+loader = PKPDDataLoader("data/EstData.csv")
 raw_data = loader.prepare_pkpd_data(weight_range=(50, 100), concomitant_allowed=True)
 
 # Initialize preprocessor
@@ -230,10 +222,11 @@ print(f"Training data: {len(train_data.subjects)} subjects")
 print(f"Test data: {len(test_data.subjects)} subjects")
 print(f"Feature dimensions: {train_data.features.shape}")
 
-# Data augmentation for better QML performance
-augmented_data = preprocessor.augment_data(train_data, augmentation_factor=3, noise_level=0.05)
+# No data augmentation - use real data only
+# Data augmentation adds synthetic noise and violates real-data-only requirement
+augmented_data = train_data
 
-print(f"Augmented training data: {len(augmented_data.subjects)} subjects")
+print(f"Training data (real data only): {len(augmented_data.subjects)} subjects")
 
 # Create classification targets for biomarker levels
 def create_biomarker_classes(biomarkers, thresholds=[3.3, 6.6, 10.0]):
@@ -285,10 +278,10 @@ axes[0,2].bar(['Train', 'Test'], [len(train_data.subjects), len(test_data.subjec
 axes[0,2].set_title('Train/Test Split')
 axes[0,2].set_ylabel('Number of Subjects')
 
-# Data augmentation effect
-axes[1,0].plot(raw_data.features[:10, 0], 'o-', label='Original', alpha=0.7)
-axes[1,0].plot(augmented_data.features[:10, 0], 's-', label='Augmented', alpha=0.7)
-axes[1,0].set_title('Data Augmentation Effect')
+# No data augmentation - show real data only
+axes[1,0].plot(raw_data.features[:10, 0], 'o-', label='Raw Data', alpha=0.7, color='blue')
+axes[1,0].plot(processed_data.features[:10, 0], 's-', label='Processed Data', alpha=0.7, color='red')
+axes[1,0].set_title('Data Processing (No Augmentation)')
 axes[1,0].set_xlabel('Sample Index')
 axes[1,0].set_ylabel('Feature Value')
 axes[1,0].legend()
@@ -563,28 +556,25 @@ def analyze_quantum_features(model, data_sample, n_samples=50):
         
         # Get quantum feature representation (before final measurement)
         # This requires accessing the quantum state or intermediate values
-        try:
-            # Simplified quantum feature extraction
+        if hasattr(model, '_extract_quantum_features'):
+            # Use actual quantum feature extraction
             quantum_rep = model._extract_quantum_features(features)
             quantum_features.append(quantum_rep)
-            classical_features.append(features)
-            
-            # Use mean biomarker as target
-            valid_bio = biomarkers[biomarkers > 0]
-            if len(valid_bio) > 0:
-                biomarker_targets.append(np.mean(valid_bio))
-            else:
-                biomarker_targets.append(0.0)
-                
-        except AttributeError:
-            # Fallback if quantum feature extraction not available
+        else:
+            # Quantum feature extraction not implemented
             # Use model predictions as proxy for quantum features
             prediction = model.predict_biomarkers(features)
-            quantum_features.append(prediction[:4] if len(prediction) >= 4 else 
+            quantum_features.append(prediction[:4] if len(prediction) >= 4 else
                                   np.pad(prediction, (0, 4-len(prediction))))
-            classical_features.append(features)
-            valid_bio = biomarkers[biomarkers > 0]
-            biomarker_targets.append(np.mean(valid_bio) if len(valid_bio) > 0 else 0.0)
+
+        classical_features.append(features)
+
+        # Use mean biomarker as target
+        valid_bio = biomarkers[biomarkers > 0]
+        if len(valid_bio) > 0:
+            biomarker_targets.append(np.mean(valid_bio))
+        else:
+            biomarker_targets.append(0.0)
     
     return (np.array(quantum_features), np.array(classical_features), 
             np.array(biomarker_targets))
@@ -710,17 +700,13 @@ svm_classifier.fit(train_features_cls, train_targets_cls)
 rf_predictions = rf_classifier.predict(test_features_cls)
 svm_predictions = svm_classifier.predict(test_features_cls)
 
-# Simulate quantum predictions (would be from actual QML model)
-# For demo, create quantum-like predictions with enhanced performance
-quantum_predictions = rf_predictions.copy()
-
-# Add quantum advantage - slightly better performance
-improvement_mask = np.random.choice(len(quantum_predictions), 
-                                  size=int(0.1 * len(quantum_predictions)), 
-                                  replace=False)
-for idx in improvement_mask:
-    if quantum_predictions[idx] != test_targets_cls[idx]:
-        quantum_predictions[idx] = test_targets_cls[idx]  # Correct some errors
+# Get actual quantum predictions from trained QML model
+# Note: This requires the QML model to be properly trained for classification
+# For now, we cannot generate fake quantum advantage - use actual model predictions
+try:
+    quantum_predictions = classification_model.predict_classification(test_features_cls)
+except (AttributeError, NotImplementedError):
+    raise RuntimeError("QML classification model not properly implemented. Cannot generate predictions without real model.")
 
 # Calculate classification metrics
 rf_accuracy = accuracy_score(test_targets_cls, rf_predictions)
@@ -856,10 +842,13 @@ dose_range = np.linspace(1, 50, 50)
 predicted_coverages = []
 
 for dose in dose_range:
-    # Simulate coverage prediction for this dose
-    # In practice, would use the actual QML model
-    coverage = min(0.95, 0.1 + (dose / 30) * 0.8 + np.random.normal(0, 0.02))
-    predicted_coverages.append(max(0, coverage))
+    # Use actual QML model to predict coverage for this dose
+    # This requires the model to have proper dose optimization capabilities
+    try:
+        coverage = best_ensemble_model.predict_population_coverage(dose, target_threshold=3.3)
+        predicted_coverages.append(coverage)
+    except (AttributeError, NotImplementedError):
+        raise RuntimeError("Cannot simulate dose-response without actual QML model implementation. Fake coverage prediction removed.")
 
 axes[1,0].plot(dose_range, predicted_coverages, 'b-', linewidth=2, label='QML Prediction')
 axes[1,0].axhline(y=0.9, color='red', linestyle='--', label='Target Coverage (90%)')
@@ -946,24 +935,23 @@ ml_test_targets_reg = np.array(test_bio_continuous)[:len(ml_test_features)]
 classical_performances = {}
 
 for name, model in classical_ml_models.items():
-    try:
-        if 'Regression' in name:
-            model.fit(ml_train_features, ml_train_targets_reg)
-            predictions = model.predict(ml_test_features)
+    print(f"Training {name}...")
+
+    if 'Regression' in name:
+        model.fit(ml_train_features, ml_train_targets_reg)
+        predictions = model.predict(ml_test_features)
+        score = r2_score(ml_test_targets_reg, predictions)
+    else:
+        # Use as regressor
+        from sklearn.base import clone
+        reg_model = clone(model)
+        if hasattr(reg_model, 'fit'):
+            reg_model.fit(ml_train_features, ml_train_targets_reg)
+            predictions = reg_model.predict(ml_test_features)
             score = r2_score(ml_test_targets_reg, predictions)
         else:
-            # Use as regressor
-            from sklearn.base import clone
-            reg_model = clone(model)
-            if hasattr(reg_model, 'fit'):
-                reg_model.fit(ml_train_features, ml_train_targets_reg)
-                predictions = reg_model.predict(ml_test_features)
-                score = r2_score(ml_test_targets_reg, predictions)
-            else:
-                score = 0.0
-    except:
-        score = 0.0
-        
+            raise NotImplementedError(f"Model {name} does not support regression")
+
     classical_performances[name] = score
     print(f"{name}: R² = {score:.4f}")
 

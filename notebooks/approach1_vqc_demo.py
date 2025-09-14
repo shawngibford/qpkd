@@ -135,7 +135,7 @@ print("\n\n2. DATA LOADING AND PREPROCESSING")
 print("-"*50)
 
 # Load the clinical trial data
-loader = PKPDDataLoader("../data/EstData.csv")
+loader = PKPDDataLoader("data/EstData.csv")
 data = loader.prepare_pkpd_data(weight_range=(50, 100), concomitant_allowed=True)
 
 print(f"Dataset loaded: {len(data.subjects)} subjects")
@@ -342,17 +342,18 @@ print(f"• Max: {np.max(trained_params):.4f}")
 # Visualize parameter distribution and correlations
 fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
-# Parameter distribution
-axes[0,0].hist(trained_params, bins=20, alpha=0.7, color='purple', edgecolor='black')
+# Parameter distribution (flatten for histogram)
+trained_params_flat = trained_params.flatten()
+axes[0,0].hist(trained_params_flat, bins=20, alpha=0.7, color='purple', edgecolor='black')
 axes[0,0].set_title('Quantum Parameter Distribution', fontweight='bold')
 axes[0,0].set_xlabel('Parameter Value')
 axes[0,0].set_ylabel('Frequency')
-axes[0,0].axvline(np.mean(trained_params), color='red', linestyle='--', label='Mean')
+axes[0,0].axvline(np.mean(trained_params_flat), color='red', linestyle='--', label='Mean')
 axes[0,0].legend()
 
 # Parameter correlations (reshaped for layers)
-n_params_per_layer = len(trained_params) // vqc_config.n_layers
-param_matrix = trained_params.reshape(vqc_config.n_layers, -1)
+n_params_per_layer = len(trained_params_flat) // vqc_config.n_layers
+param_matrix = trained_params_flat.reshape(vqc_config.n_layers, -1)
 
 im = axes[0,1].imshow(param_matrix, cmap='RdBu', aspect='auto')
 axes[0,1].set_title('Parameters by Layer', fontweight='bold')
@@ -363,28 +364,42 @@ plt.colorbar(im, ax=axes[0,1])
 # Parameter sensitivity analysis
 def parameter_sensitivity(param_idx, param_range=0.5, n_points=20):
     """Analyze sensitivity of output to parameter changes."""
+    # Flatten trained_params to handle multi-dimensional parameter arrays
     base_params = trained_params.copy()
+    base_params_flat = base_params.flatten()
+
+    # Handle parameter indexing safely
+    if param_idx >= len(base_params_flat):
+        param_idx = param_idx % len(base_params_flat)
+
     param_values = np.linspace(
-        base_params[param_idx] - param_range,
-        base_params[param_idx] + param_range,
+        base_params_flat[param_idx] - param_range,
+        base_params_flat[param_idx] + param_range,
         n_points
     )
-    
+
     outputs = []
     for param_val in param_values:
         test_params = base_params.copy()
-        test_params[param_idx] = param_val
-        
+        test_params_flat = test_params.flatten()
+        test_params_flat[param_idx] = param_val
+        test_params = test_params_flat.reshape(base_params.shape)
+
         # Test with a representative input
         test_input = data.features[0]  # First subject
         # Use the quantum circuit (qnode) directly
         if hasattr(vqc_model, 'qnode') and vqc_model.qnode is not None:
-            output = vqc_model.qnode(test_params, test_input)
+            output_raw = vqc_model.qnode(test_params, test_input)
+            # Convert to scalar for plotting (use mean of multi-qubit output)
+            if hasattr(output_raw, '__len__') and len(output_raw) > 1:
+                output = np.mean(output_raw)
+            else:
+                output = float(output_raw)
         else:
             # Fallback to random output if qnode not available
             output = np.random.random()
         outputs.append(output)
-        
+
     return param_values, np.array(outputs)
 
 # Sensitivity analysis for first few parameters

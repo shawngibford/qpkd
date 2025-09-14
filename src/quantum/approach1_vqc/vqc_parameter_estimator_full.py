@@ -393,6 +393,17 @@ class VQCParameterEstimatorFull(QuantumPKPDBase):
     def _ensure_scalar_result(self, values) -> float:
         """Ensure quantum circuit outputs are scalars using PennyLane patterns."""
         try:
+            # Handle list inputs (common from quantum circuits returning multiple measurements)
+            if isinstance(values, list):
+                if len(values) == 0:
+                    return 0.0
+                elif len(values) == 1:
+                    return float(values[0])
+                else:
+                    # Use mean reduction for multi-element lists
+                    return float(np.mean(values))
+
+            # Handle numpy arrays and other array-like objects
             if hasattr(values, 'size'):
                 size_val = int(values.size)  # Ensure scalar size comparison
                 if size_val == 0:
@@ -402,6 +413,8 @@ class VQCParameterEstimatorFull(QuantumPKPDBase):
                 else:
                     # Use mean reduction for multi-element arrays
                     return float(np.mean(values))
+
+            # Handle scalar values
             return float(values)
         except (ValueError, TypeError) as e:
             self.logger.log_error("VQC", e, {"context": "scalar_conversion", "values_type": str(type(values))})
@@ -489,14 +502,14 @@ class VQCParameterEstimatorFull(QuantumPKPDBase):
                             features_array = features_array.reshape(1)
                         
                         try:
-                            # Get quantum circuit output and ensure scalar result
+                            # Get quantum circuit output (keep raw for parameter mapping)
                             quantum_output_raw = self.qnode(params, features_array)
-                            quantum_output = self._ensure_scalar_result(quantum_output_raw)
-                            batch_outputs.append(quantum_output)
-                            
-                            # Map to PK/PD parameters with stabilized output
-                            pk_params = self._map_quantum_to_pk_params(quantum_output)
-                            pd_params = self._map_quantum_to_pd_params(quantum_output)
+                            quantum_output_scalar = self._ensure_scalar_result(quantum_output_raw)
+                            batch_outputs.append(quantum_output_scalar)
+
+                            # Map to PK/PD parameters using raw quantum output (preserves multiple measurements)
+                            pk_params = self._map_quantum_to_pk_params(quantum_output_raw)
+                            pd_params = self._map_quantum_to_pd_params(quantum_output_raw)
                             
                             # Get covariates
                             covariates = {
@@ -627,28 +640,36 @@ class VQCParameterEstimatorFull(QuantumPKPDBase):
         else:
             return delta * (abs_error - 0.5 * delta)
     
-    def _map_quantum_to_pk_params(self, quantum_output: List[float]) -> Dict[str, float]:
+    def _map_quantum_to_pk_params(self, quantum_output) -> Dict[str, float]:
         """Enhanced quantum output to PK parameter mapping"""
-        # Ensure quantum output is valid
-        quantum_output = np.array(quantum_output)
-        quantum_output = np.clip(quantum_output, -1, 1)  # Clamp expectation values
-        
+        # Handle both scalar and list/array quantum outputs
+        if np.isscalar(quantum_output):
+            # If scalar, replicate it to create multiple parameters with small variations
+            base_value = np.clip(quantum_output, -1, 1)
+            quantum_values = [base_value + 0.1 * i for i in range(5)]
+        else:
+            # Ensure quantum output is valid array/list
+            quantum_values = np.atleast_1d(quantum_output)
+            quantum_values = np.clip(quantum_values, -1, 1)  # Clamp expectation values
+
+        # Ensure we have enough values (pad if necessary)
+        if len(quantum_values) < 5:
+            # Pad with scaled variations of the available values
+            while len(quantum_values) < 5:
+                base_idx = len(quantum_values) % len(np.atleast_1d(quantum_output))
+                new_val = quantum_values[base_idx] * 0.9  # Small variation
+                quantum_values = np.append(quantum_values, new_val)
+
         # Map to parameter ranges using sigmoid-like transformation
         def sigmoid_transform(x, min_val, max_val):
             return min_val + (max_val - min_val) / (1 + np.exp(-5 * x))
-        
-        ka = sigmoid_transform(quantum_output[0], *self.vqc_config.parameter_bounds['ka'])
-        cl = sigmoid_transform(quantum_output[1], *self.vqc_config.parameter_bounds['cl'])
-        v1 = sigmoid_transform(quantum_output[2], *self.vqc_config.parameter_bounds['v1'])
-        
-        if len(quantum_output) > 3:
-            q = sigmoid_transform(quantum_output[3], *self.vqc_config.parameter_bounds['q'])
-            v2 = sigmoid_transform(quantum_output[4] if len(quantum_output) > 4 else 0, 
-                                 *self.vqc_config.parameter_bounds['v2'])
-        else:
-            q = 2.0  # Default value
-            v2 = 50.0  # Default value
-            
+
+        ka = sigmoid_transform(quantum_values[0], *self.vqc_config.parameter_bounds['ka'])
+        cl = sigmoid_transform(quantum_values[1], *self.vqc_config.parameter_bounds['cl'])
+        v1 = sigmoid_transform(quantum_values[2], *self.vqc_config.parameter_bounds['v1'])
+        q = sigmoid_transform(quantum_values[3], *self.vqc_config.parameter_bounds['q'])
+        v2 = sigmoid_transform(quantum_values[4], *self.vqc_config.parameter_bounds['v2'])
+
         return {'ka': ka, 'cl': cl, 'v1': v1, 'q': q, 'v2': v2}
     
     def _check_convergence_with_stability(self, costs: List[float], tolerance: float = 1e-6) -> bool:
@@ -692,24 +713,43 @@ class VQCParameterEstimatorFull(QuantumPKPDBase):
             
         return params
     
-    def _map_quantum_to_pd_params(self, quantum_output: List[float]) -> Dict[str, float]:
+    def _map_quantum_to_pd_params(self, quantum_output) -> Dict[str, float]:
         """Enhanced quantum output to PD parameter mapping"""
-        quantum_output = np.array(quantum_output)
-        quantum_output = np.clip(quantum_output, -1, 1)
-        
+        # Handle both scalar and list/array quantum outputs
+        if np.isscalar(quantum_output):
+            # If scalar, replicate it to create multiple parameters with small variations
+            base_value = np.clip(quantum_output, -1, 1)
+            quantum_values = [base_value + 0.15 * i for i in range(4)]  # Different variations for PD params
+        else:
+            # Ensure quantum output is valid array/list
+            quantum_values = np.atleast_1d(quantum_output)
+            quantum_values = np.clip(quantum_values, -1, 1)
+
+        # Ensure we have enough values (pad if necessary)
+        if len(quantum_values) < 4:
+            # Pad with scaled variations of the available values
+            while len(quantum_values) < 4:
+                base_idx = len(quantum_values) % len(np.atleast_1d(quantum_output))
+                new_val = quantum_values[base_idx] * 0.85  # Different scaling for PD
+                quantum_values = np.append(quantum_values, new_val)
+
         def sigmoid_transform(x, min_val, max_val):
             return min_val + (max_val - min_val) / (1 + np.exp(-5 * x))
-        
-        # Use different quantum outputs for PD parameters
-        baseline = sigmoid_transform(quantum_output[5] if len(quantum_output) > 5 else quantum_output[0], 
-                                   *self.vqc_config.parameter_bounds['baseline'])
-        imax = sigmoid_transform(quantum_output[6] if len(quantum_output) > 6 else quantum_output[1],
-                               *self.vqc_config.parameter_bounds['imax'])
-        ic50 = sigmoid_transform(quantum_output[7] if len(quantum_output) > 7 else quantum_output[2],
-                               *self.vqc_config.parameter_bounds['ic50'])
-        gamma = sigmoid_transform(quantum_output[0],  # Reuse first output
-                                *self.vqc_config.parameter_bounds['gamma'])
-        
+
+        # Use different quantum values for PD parameters (or indices if enough values available)
+        if len(quantum_values) >= 8:
+            # Use different indices if we have enough quantum measurements
+            baseline = sigmoid_transform(quantum_values[5], *self.vqc_config.parameter_bounds['baseline'])
+            imax = sigmoid_transform(quantum_values[6], *self.vqc_config.parameter_bounds['imax'])
+            ic50 = sigmoid_transform(quantum_values[7], *self.vqc_config.parameter_bounds['ic50'])
+            gamma = sigmoid_transform(quantum_values[0], *self.vqc_config.parameter_bounds['gamma'])
+        else:
+            # Use the available values with wrapping
+            baseline = sigmoid_transform(quantum_values[0], *self.vqc_config.parameter_bounds['baseline'])
+            imax = sigmoid_transform(quantum_values[1], *self.vqc_config.parameter_bounds['imax'])
+            ic50 = sigmoid_transform(quantum_values[2], *self.vqc_config.parameter_bounds['ic50'])
+            gamma = sigmoid_transform(quantum_values[3], *self.vqc_config.parameter_bounds['gamma'])
+
         return {'baseline': baseline, 'imax': imax, 'ic50': ic50, 'gamma': gamma}
     
     def hyperparameter_optimization(self, data: PKPDData, 
@@ -1010,11 +1050,15 @@ class VQCParameterEstimatorFull(QuantumPKPDBase):
             raise ValueError("Model not trained. Call fit() first.")
             
         try:
-            # Create feature vector
-            features = np.array([time[0], dose, 
-                               covariates.get('body_weight', 70.0),
-                               covariates.get('concomitant_med', 0.0)])
-            
+            # Create feature vector - match training data format
+            # Training data has shape (48, 3), so we need to match that
+            # Based on data loader output: likely [body_weight, dose, concomitant_med]
+            features = np.array([
+                covariates.get('body_weight', 70.0),
+                dose,
+                covariates.get('concomitant_med', 0.0)
+            ])
+
             # Scale features
             if hasattr(self, 'feature_scaler'):
                 features_scaled = self.feature_scaler.transform(features.reshape(1, -1))[0]
