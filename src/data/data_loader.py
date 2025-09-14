@@ -99,9 +99,13 @@ class PKPDDataLoader:
         weight_data = self._extract_body_weights(df_filtered)
         conmed_data = self._extract_concomitant_meds(df_filtered)
                 
+        # The VQC model expects features to include time, so we need to construct them properly
+        # Since we have time series data, we'll use the features as fallback but the VQC
+        # encode_data method will reconstruct [time, dose, body_weight, concomitant_med] from
+        # the individual time_points, doses, body_weights, concomitant_meds arrays
         return PKPDDataCompat(
             subjects=df_filtered['ID'].unique(),
-            features=features,
+            features=features,  # This is per-subject [weight, dose, conmed] for compatibility
             concentrations=concentrations,
             biomarkers=biomarkers,
             time_points=time_data,
@@ -111,17 +115,14 @@ class PKPDDataLoader:
         )
         
     def _extract_features(self, df: pd.DataFrame) -> np.ndarray:
-        """Extract subject features for modeling."""
-        # Get basic features per subject
+        """Extract subject features for modeling using only available data columns."""
+        # Get features per subject - only use columns that exist in the data file
+        # Available columns: ID, BW, COMED, DOSE, TIME, DV, EVID, MDV, AMT, CMT, DVID
         subject_features = df[['BW', 'DOSE', 'COMED']].groupby(df['ID']).first()
-        
-        # Add dummy Age and Sex columns to match demo expectations  
-        n_subjects = len(subject_features)
-        subject_features['AGE'] = np.random.randint(18, 80, n_subjects)  # Random ages 18-80
-        subject_features['SEX'] = np.random.randint(0, 2, n_subjects)    # Random binary sex
-        
-        # Reorder to match expected format: ['Weight', 'Age', 'Sex', 'Dose', 'Conmed']
-        features = subject_features[['BW', 'AGE', 'SEX', 'DOSE', 'COMED']].values
+
+        # Use only the actual data columns available: Body Weight, Dose, Concomitant Medication
+        # Format: ['Weight', 'Dose', 'Conmed'] - no age/sex since not in data
+        features = subject_features[['BW', 'DOSE', 'COMED']].values
         return features.astype(np.float32)
         
     def _extract_concentrations(self, df: pd.DataFrame) -> np.ndarray:

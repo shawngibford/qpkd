@@ -155,93 +155,67 @@ print(f"Subjects sample: {data.subjects[:5] if len(data.subjects) > 0 else 'Empt
 fig, axes = plt.subplots(2, 2, figsize=(15, 10))
 fig.suptitle('PK/PD Dataset Overview', fontsize=16, fontweight='bold')
 
-# Feature distributions
-try:
-    features_df = pd.DataFrame(data.features, columns=['Weight', 'Age', 'Sex', 'Dose', 'Conmed'])
-    print(f"Features DataFrame shape: {features_df.shape}")
-    print(f"Weight column stats: min={features_df['Weight'].min():.1f}, max={features_df['Weight'].max():.1f}")
-    
-    axes[0,0].hist(features_df['Weight'], bins=15, alpha=0.7, color='skyblue')
-    axes[0,0].set_title('Weight Distribution (kg)')
-    axes[0,0].set_xlabel('Weight (kg)')
-    axes[0,0].set_ylabel('Frequency')
-except Exception as e:
-    print(f"Error creating weight histogram: {e}")
-    axes[0,0].text(0.5, 0.5, f'Weight distribution\n(Error: {str(e)[:50]})', 
-                   transform=axes[0,0].transAxes, ha='center', va='center')
-    axes[0,0].set_title('Weight Distribution (Error)')
+# Feature distributions - only using actual data columns
+features_df = pd.DataFrame(data.features, columns=['Weight', 'Dose', 'Conmed'])
+print(f"Features DataFrame shape: {features_df.shape}")
+print(f"Weight column stats: min={features_df['Weight'].min():.1f}, max={features_df['Weight'].max():.1f}")
+
+axes[0,0].hist(features_df['Weight'], bins=15, alpha=0.7, color='skyblue')
+axes[0,0].set_title('Weight Distribution (kg)')
+axes[0,0].set_xlabel('Weight (kg)')
+axes[0,0].set_ylabel('Frequency')
 
 # Dose vs Weight relationship
-try:
-    print(f"Dose column stats: min={features_df['Dose'].min():.1f}, max={features_df['Dose'].max():.1f}")
-    axes[0,1].scatter(features_df['Weight'], features_df['Dose'], alpha=0.6, color='coral')
-    axes[0,1].set_title('Dose vs Weight Relationship')
-    axes[0,1].set_xlabel('Weight (kg)')
-    axes[0,1].set_ylabel('Dose (mg)')
-except Exception as e:
-    print(f"Error creating dose vs weight scatter: {e}")
-    axes[0,1].text(0.5, 0.5, f'Dose vs Weight\n(Error: {str(e)[:50]})', 
-                   transform=axes[0,1].transAxes, ha='center', va='center')
-    axes[0,1].set_title('Dose vs Weight (Error)')
+print(f"Dose column stats: min={features_df['Dose'].min():.1f}, max={features_df['Dose'].max():.1f}")
+axes[0,1].scatter(features_df['Weight'], features_df['Dose'], alpha=0.6, color='coral')
+axes[0,1].set_title('Dose vs Weight Relationship')
+axes[0,1].set_xlabel('Weight (kg)')
+axes[0,1].set_ylabel('Dose (mg)')
 
 # Biomarker time series (sample subjects)
-try:
-    n_subjects = len(data.subjects)
-    n_samples = min(5, n_subjects)  # Don't try to sample more subjects than we have
-    print(f"Plotting biomarker time series for {n_samples} of {n_subjects} subjects")
-    
-    if n_subjects > 0 and data.biomarkers.shape[1] > 0:
-        sample_subjects = np.random.choice(n_subjects, n_samples, replace=False)
-        time_points = np.linspace(0, 168, data.biomarkers.shape[1])  # Assume 1 week
-        
-        plot_count = 0
-        for i, subject_idx in enumerate(sample_subjects):
-            biomarker_series = data.biomarkers[subject_idx]
-            valid_mask = biomarker_series > 0  # Remove padded zeros
-            
-            if np.any(valid_mask):  # Only plot if there's valid data
-                axes[1,0].plot(time_points[valid_mask], biomarker_series[valid_mask], 
-                              label=f'Subject {data.subjects[subject_idx]}', alpha=0.7)
-                plot_count += 1
-        
-        print(f"Successfully plotted {plot_count} biomarker time series")
-        axes[1,0].set_title('Biomarker Time Series (Sample Subjects)')
-        axes[1,0].set_xlabel('Time (hours)')
-        axes[1,0].set_ylabel('Biomarker (ng/mL)')
-        axes[1,0].axhline(y=3.3, color='red', linestyle='--', label='Target Threshold')
-        axes[1,0].legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    else:
-        raise ValueError("No subjects or biomarker data available")
-        
-except Exception as e:
-    print(f"Error creating biomarker time series: {e}")
-    axes[1,0].text(0.5, 0.5, f'Biomarker Time Series\n(Error: {str(e)[:50]})', 
-                   transform=axes[1,0].transAxes, ha='center', va='center')
-    axes[1,0].set_title('Biomarker Time Series (Error)')
+n_subjects = len(data.subjects)
+n_samples = min(5, n_subjects)  # Don't try to sample more subjects than we have
+print(f"Plotting biomarker time series for {n_samples} of {n_subjects} subjects")
+
+if n_subjects > 0 and data.biomarkers.shape[1] > 0:
+    sample_subjects = np.random.choice(n_subjects, n_samples, replace=False)
+    time_points = np.linspace(0, 168, data.biomarkers.shape[1])  # Assume 1 week
+
+    plot_count = 0
+    for i, subject_idx in enumerate(sample_subjects):
+        biomarker_series = data.biomarkers[subject_idx]
+        valid_mask = biomarker_series > 0  # Remove padded zeros
+
+        if np.any(valid_mask):  # Only plot if there's valid data
+            axes[1,0].plot(time_points[valid_mask], biomarker_series[valid_mask],
+                          label=f'Subject {data.subjects[subject_idx]}', alpha=0.7)
+            plot_count += 1
+
+    print(f"Successfully plotted {plot_count} biomarker time series")
+    axes[1,0].set_title('Biomarker Time Series (Sample Subjects)')
+    axes[1,0].set_xlabel('Time (hours)')
+    axes[1,0].set_ylabel('Biomarker (ng/mL)')
+    axes[1,0].axhline(y=3.3, color='red', linestyle='--', label='Target Threshold')
+    axes[1,0].legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+else:
+    raise ValueError("No subjects or biomarker data available")
 
 # Concentration-Biomarker relationship
-try:
-    conc_flat = data.concentrations[data.concentrations > 0]
-    bio_flat = data.biomarkers[data.biomarkers > 0]
-    
-    print(f"Non-zero concentrations: {len(conc_flat)}, Non-zero biomarkers: {len(bio_flat)}")
-    
-    if len(conc_flat) > 0 and len(bio_flat) > 0:
-        min_len = min(len(conc_flat), len(bio_flat))
-        print(f"Plotting {min_len} concentration vs biomarker points")
-        
-        axes[1,1].scatter(conc_flat[:min_len], bio_flat[:min_len], alpha=0.4, color='green')
-        axes[1,1].set_title('Concentration vs Biomarker')
-        axes[1,1].set_xlabel('Drug Concentration (mg/L)')
-        axes[1,1].set_ylabel('Biomarker (ng/mL)')
-    else:
-        raise ValueError("No valid concentration or biomarker data for scatter plot")
-        
-except Exception as e:
-    print(f"Error creating concentration vs biomarker scatter: {e}")
-    axes[1,1].text(0.5, 0.5, f'Concentration vs Biomarker\n(Error: {str(e)[:50]})', 
-                   transform=axes[1,1].transAxes, ha='center', va='center')
-    axes[1,1].set_title('Concentration vs Biomarker (Error)')
+conc_flat = data.concentrations[data.concentrations > 0]
+bio_flat = data.biomarkers[data.biomarkers > 0]
+
+print(f"Non-zero concentrations: {len(conc_flat)}, Non-zero biomarkers: {len(bio_flat)}")
+
+if len(conc_flat) > 0 and len(bio_flat) > 0:
+    min_len = min(len(conc_flat), len(bio_flat))
+    print(f"Plotting {min_len} concentration vs biomarker points")
+
+    axes[1,1].scatter(conc_flat[:min_len], bio_flat[:min_len], alpha=0.4, color='green')
+    axes[1,1].set_title('Concentration vs Biomarker')
+    axes[1,1].set_xlabel('Drug Concentration (mg/L)')
+    axes[1,1].set_ylabel('Biomarker (ng/mL)')
+else:
+    raise ValueError("No valid concentration or biomarker data for scatter plot")
 
 plt.tight_layout()
 plt.show()
@@ -294,18 +268,23 @@ else:
 fig, axes = plt.subplots(1, 3, figsize=(18, 5))
 
 # Loss curve
-if hasattr(vqc_model, 'training_history') and vqc_model.training_history and 'losses' in vqc_model.training_history:
-    axes[0].plot(vqc_model.training_history['losses'], color='blue', linewidth=2)
+if hasattr(vqc_model, 'training_history') and vqc_model.training_history:
+    if isinstance(vqc_model.training_history, list):
+        losses = [l for l in vqc_model.training_history if np.isfinite(l)]
+        axes[0].plot(losses, color='blue', linewidth=2)
+    elif 'losses' in vqc_model.training_history:
+        axes[0].plot(vqc_model.training_history['losses'], color='blue', linewidth=2)
 else:
-    # Create mock data for visualization
-    axes[0].plot([1.0, 0.5, 0.3, 0.2, 0.15], color='blue', linewidth=2)
+    print("No training history available for plotting loss curve")
+    axes[0].text(0.5, 0.5, 'No training history\navailable',
+                transform=axes[0].transAxes, ha='center', va='center')
 axes[0].set_title('VQC Training Loss', fontweight='bold')
 axes[0].set_xlabel('Iteration')
 axes[0].set_ylabel('Loss')
 axes[0].grid(True, alpha=0.3)
 
 # Parameter evolution (sample parameters)
-if (hasattr(vqc_model, 'training_history') and vqc_model.training_history and 
+if (hasattr(vqc_model, 'training_history') and vqc_model.training_history and
     'parameter_history' in vqc_model.training_history):
     param_sample = vqc_model.training_history['parameter_history'][:, :6]  # First 6 parameters
     for i in range(6):
@@ -316,19 +295,16 @@ if (hasattr(vqc_model, 'training_history') and vqc_model.training_history and
     axes[1].legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     axes[1].grid(True, alpha=0.3)
 else:
-    # Create mock parameter evolution data
-    import numpy as np
-    mock_params = np.random.randn(5, 6).cumsum(axis=0) * 0.1
-    for i in range(6):
-        axes[1].plot(mock_params[:, i], alpha=0.7, label=f'Param {i+1}')
-    axes[1].set_title('Parameter Evolution (Mock)', fontweight='bold')
+    print("No parameter history available for plotting parameter evolution")
+    axes[1].text(0.5, 0.5, 'No parameter history\navailable',
+                transform=axes[1].transAxes, ha='center', va='center')
+    axes[1].set_title('Parameter Evolution', fontweight='bold')
     axes[1].set_xlabel('Iteration')
     axes[1].set_ylabel('Parameter Value')
-    axes[1].legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     axes[1].grid(True, alpha=0.3)
 
 # Validation metrics over time
-if (hasattr(vqc_model, 'training_history') and vqc_model.training_history and 
+if (hasattr(vqc_model, 'training_history') and vqc_model.training_history and
     'validation_scores' in vqc_model.training_history):
     axes[2].plot(vqc_model.training_history['validation_scores'], color='orange', linewidth=2)
     axes[2].set_title('Validation Performance', fontweight='bold')
@@ -336,9 +312,10 @@ if (hasattr(vqc_model, 'training_history') and vqc_model.training_history and
     axes[2].set_ylabel('R² Score')
     axes[2].grid(True, alpha=0.3)
 else:
-    # Create mock validation scores
-    axes[2].plot([0.3, 0.5, 0.65, 0.72, 0.75], color='orange', linewidth=2)
-    axes[2].set_title('Validation Performance (Mock)', fontweight='bold')
+    print("No validation history available for plotting validation performance")
+    axes[2].text(0.5, 0.5, 'No validation history\navailable',
+                transform=axes[2].transAxes, ha='center', va='center')
+    axes[2].set_title('Validation Performance', fontweight='bold')
     axes[2].set_xlabel('Iteration')
     axes[2].set_ylabel('R² Score')
     axes[2].grid(True, alpha=0.3)
@@ -484,12 +461,10 @@ for i in range(len(data.subjects)):
     target_biomarkers = data.biomarkers[i]
     
     # Predict biomarkers for this subject
-    try:
-        pred = vqc_model.predict_biomarker(dose=50.0, time=np.array([24.0]), 
-                                         covariates={'body_weight': features[0], 'concomitant_med': features[1]})
-        prediction = pred[0] if hasattr(pred, '__len__') else pred
-    except Exception as e:
-        prediction = 10.0  # Default biomarker value
+    # features format: [Weight, Dose, Conmed] (no age/sex)
+    pred = vqc_model.predict_biomarker(dose=50.0, time=np.array([24.0]),
+                                     covariates={'body_weight': features[0], 'concomitant_med': features[2]})
+    prediction = pred[0] if hasattr(pred, '__len__') else pred
     
     # Only use valid (non-zero) biomarker measurements
     valid_mask = target_biomarkers > 0

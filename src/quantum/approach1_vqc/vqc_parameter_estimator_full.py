@@ -22,6 +22,50 @@ from ..core.pennylane_utils import QuantumCircuitBuilder, QuantumOptimizer
 from utils.logging_system import QuantumPKPDLogger, ExperimentMetadata, ModelPerformance, DosingResults
 
 
+class ArrayUtils:
+    """Utility class for safe array operations that avoid boolean evaluation errors."""
+
+    @staticmethod
+    def safe_size(arr):
+        """Safely get array size without triggering boolean evaluation."""
+        if hasattr(arr, 'size'):
+            return int(arr.size)
+        elif hasattr(arr, '__len__'):
+            return len(arr)
+        else:
+            return 1
+
+    @staticmethod
+    def safe_length(arr):
+        """Safely get array length."""
+        if hasattr(arr, '__len__'):
+            return len(arr)
+        elif hasattr(arr, 'size'):
+            return int(arr.size)
+        else:
+            return 1
+
+    @staticmethod
+    def safe_comparison(a, b, op):
+        """Safely perform scalar comparisons."""
+        # Convert to scalars if needed
+        a_val = float(a) if hasattr(a, '__float__') else a
+        b_val = float(b) if hasattr(b, '__float__') else b
+
+        if op == '>':
+            return a_val > b_val
+        elif op == '<':
+            return a_val < b_val
+        elif op == '>=':
+            return a_val >= b_val
+        elif op == '<=':
+            return a_val <= b_val
+        elif op == '==':
+            return a_val == b_val
+        else:
+            raise ValueError(f"Unsupported operation: {op}")
+
+
 
 @dataclass
 class VQCHyperparameters:
@@ -86,6 +130,9 @@ class VQCParameterEstimatorFull(QuantumPKPDBase):
         # Error handling
         self.error_count = 0
         self.max_errors = 10
+
+        # Array utilities
+        self.array_utils = ArrayUtils()
         
         # Default parameter bounds
         if not config.parameter_bounds:
@@ -360,6 +407,27 @@ class VQCParameterEstimatorFull(QuantumPKPDBase):
             self.logger.log_error("VQC", e, {"context": "scalar_conversion", "values_type": str(type(values))})
             return 0.0
     
+    def _ensure_homogeneous_batch(self, batch_features):
+        """Ensure batch features have consistent shape for quantum circuit processing."""
+        try:
+            # Convert to numpy array with padding if necessary
+            if isinstance(batch_features, list):
+                max_len = max(len(f) if hasattr(f, '__len__') else 1 for f in batch_features)
+                padded_batch = []
+                for features in batch_features:
+                    if hasattr(features, '__len__'):
+                        padded = np.pad(features, (0, max(0, max_len - len(features))))
+                    else:
+                        padded = np.array([features] + [0] * (max_len - 1))
+                    padded_batch.append(padded)
+                return np.array(padded_batch)
+            else:
+                return np.array(batch_features)
+        except Exception as e:
+            self.logger.log_error("VQC", e, {"context": "batch_homogenization"})
+            # Return simple format
+            return np.array(batch_features) if hasattr(batch_features, '__iter__') else np.array([batch_features])
+
     def _clip_and_validate_cost(self, cost: float) -> float:
         """Apply numerical stability checks to cost value."""
         # Clip extreme values
@@ -402,7 +470,7 @@ class VQCParameterEstimatorFull(QuantumPKPDBase):
             
             for batch_idx in range(n_batches):
                 start_idx = batch_idx * batch_size
-                end_idx = min((batch_idx + 1) * batch_size, encoded_features_len)
+                end_idx = min((batch_idx + 1) * batch_size, n_samples)
                 batch_features = encoded_features[start_idx:end_idx]
                 
                 # Use PennyLane batch processing to handle inhomogeneous arrays
