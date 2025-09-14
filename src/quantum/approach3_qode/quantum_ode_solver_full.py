@@ -18,7 +18,7 @@ from sklearn.preprocessing import StandardScaler
 
 from ..core.base import QuantumPKPDBase, ModelConfig, PKPDData, OptimizationResult
 from ..core.pennylane_utils import QuantumCircuitBuilder, QuantumOptimizer
-from ...utils.logging_system import QuantumPKPDLogger, DosingResults
+from utils.logging_system import QuantumPKPDLogger, DosingResults
 
 
 @dataclass
@@ -83,14 +83,23 @@ class QuantumODESolverFull(QuantumPKPDBase):
         self.classical_solution = None
         self.quantum_enhancement_factor = 1.0
         
-    def setup_quantum_device(self) -> qml.Device:
+        # Initialize quantum device immediately
+        self.setup_quantum_device()
+        
+    def setup_quantum_device(self) -> qml.device:
         """Setup quantum device for ODE evolution"""
         try:
             # Use device optimized for time evolution
             if self.config.n_qubits <= 10:
                 device_name = "default.qubit"
             else:
-                device_name = "lightning.qubit"
+                # Fall back to default.qubit if lightning.qubit is not available
+                try:
+                    test_device = qml.device("lightning.qubit", wires=1)
+                    device_name = "lightning.qubit"
+                except:
+                    device_name = "default.qubit"
+                    self.logger.logger.warning("lightning.qubit not available, using default.qubit")
                 
             self.device = qml.device(
                 device_name,
@@ -103,11 +112,21 @@ class QuantumODESolverFull(QuantumPKPDBase):
             
         except Exception as e:
             self.logger.log_error("QODE", e, {"context": "device_setup"})
-            raise RuntimeError(f"Failed to setup QODE device: {e}")
+            # Try fallback to minimal device
+            try:
+                self.device = qml.device("default.qubit", wires=max(2, self.config.n_qubits))
+                self.logger.logger.warning("Using fallback default.qubit device")
+                return self.device
+            except Exception as fallback_error:
+                raise RuntimeError(f"Failed to setup any QODE device: {e}, fallback also failed: {fallback_error}")
     
     def build_quantum_circuit(self, n_qubits: int, n_layers: int) -> callable:
         """Build quantum evolution circuit for ODE solving"""
         try:
+            # Ensure device is available
+            if self.device is None:
+                self.setup_quantum_device()
+            
             @qml.qnode(self.device)
             def qode_evolution_circuit(evolution_params, hamiltonian_params, 
                                      initial_state, evolution_time):
@@ -148,25 +167,42 @@ class QuantumODESolverFull(QuantumPKPDBase):
     
     def _prepare_initial_state(self, initial_conditions: np.ndarray, n_qubits: int):
         """Prepare quantum state representing initial ODE conditions"""
-        # Normalize initial conditions
-        normalized_ic = initial_conditions / (np.linalg.norm(initial_conditions) + 1e-10)
-        
-        # Encode initial conditions using amplitude encoding
-        # Pad or truncate to fit available qubits
-        state_size = 2 ** n_qubits
-        if len(normalized_ic) < state_size:
-            # Pad with zeros
-            padded_ic = np.zeros(state_size)
-            padded_ic[:len(normalized_ic)] = normalized_ic
-        else:
-            # Truncate to fit
-            padded_ic = normalized_ic[:state_size]
-        
-        # Renormalize
-        padded_ic = padded_ic / (np.linalg.norm(padded_ic) + 1e-10)
-        
-        # Amplitude encoding
-        qml.AmplitudeEmbedding(padded_ic, wires=range(n_qubits), normalize=True)
+        try:
+            # Normalize initial conditions
+            norm = np.linalg.norm(initial_conditions)
+            if norm < 1e-10:
+                # Handle zero initial conditions
+                normalized_ic = np.ones_like(initial_conditions) / np.sqrt(len(initial_conditions))
+            else:
+                normalized_ic = initial_conditions / norm
+            
+            # Encode initial conditions using amplitude encoding
+            # Pad or truncate to fit available qubits
+            state_size = 2 ** n_qubits
+            if len(normalized_ic) < state_size:
+                # Pad with zeros
+                padded_ic = np.zeros(state_size)
+                padded_ic[:len(normalized_ic)] = normalized_ic
+            else:
+                # Truncate to fit
+                padded_ic = normalized_ic[:state_size]
+            
+            # Renormalize
+            final_norm = np.linalg.norm(padded_ic)
+            if final_norm < 1e-10:
+                # Fallback: uniform superposition
+                padded_ic = np.ones(state_size) / np.sqrt(state_size)
+            else:
+                padded_ic = padded_ic / final_norm
+            
+            # Amplitude encoding
+            qml.AmplitudeEmbedding(padded_ic, wires=range(n_qubits), normalize=True)
+            
+        except Exception as e:
+            # Fallback: simple basis state preparation
+            self.logger.logger.warning(f"AmplitudeEmbedding failed, using basis state: {e}")
+            # Prepare |0...0> state (already the default)
+            pass
     
     def _variational_evolution_layers(self, evolution_params: np.ndarray, 
                                     hamiltonian_params: np.ndarray,
@@ -332,10 +368,23 @@ class QuantumODESolverFull(QuantumPKPDBase):
         """Extract dosing events (time, dose) for this subject"""
         dosing_events = []
         
-        for i, (time, dose) in enumerate(zip(subject_data['times'], subject_data['doses'])):
-            if dose > 0 and (i == 0 or dose != subject_data['doses'][i-1] or 
-                           time - subject_data['times'][i-1] > 12):  # New dose or significant time gap
-                dosing_events.append((time, dose))
+        # Convert arrays to lists to avoid comparison issues
+        times = np.array(subject_data['times']).flatten()
+        doses = np.array(subject_data['doses']).flatten()
+        
+        for i in range(len(times)):
+            time_val = float(times[i])
+            dose_val = float(doses[i])
+            
+            if dose_val > 0:
+                is_new_dose = i == 0
+                if not is_new_dose:
+                    prev_dose = float(doses[i-1])
+                    prev_time = float(times[i-1])
+                    is_new_dose = (dose_val != prev_dose or time_val - prev_time > 12)
+                
+                if is_new_dose:
+                    dosing_events.append((time_val, dose_val))
         
         return dosing_events
     
@@ -422,8 +471,9 @@ class QuantumODESolverFull(QuantumPKPDBase):
         current_time = 0.0
         
         # Sort time points and dosing events
-        all_events = [(t, 'obs', 0.0) for t in time_points]
-        all_events.extend([(t, 'dose', dose) for t, dose in dosing_events])
+        time_points_list = np.array(time_points).flatten().tolist()
+        all_events = [(float(t), 'obs', 0.0) for t in time_points_list]
+        all_events.extend([(float(t), 'dose', float(dose)) for t, dose in dosing_events])
         all_events.sort()
         
         for event_time, event_type, dose in all_events:
@@ -552,7 +602,8 @@ class QuantumODESolverFull(QuantumPKPDBase):
         current_state = initial_conditions.copy()
         current_time = 0.0
         
-        all_times = sorted(list(time_points) + [t for t, _ in dosing_events])
+        time_points_list = np.array(time_points).flatten().tolist()
+        all_times = sorted(time_points_list + [float(t) for t, _ in dosing_events])
         
         for target_time in all_times:
             if target_time > current_time:
@@ -568,7 +619,7 @@ class QuantumODESolverFull(QuantumPKPDBase):
                     current_state[0] += dose
             
             # Record if this is an observation time
-            if target_time in time_points:
+            if np.any(np.abs(np.array(time_points_list) - target_time) < 1e-6):
                 solution.append(current_state.copy())
         
         return np.array(solution)
@@ -962,6 +1013,18 @@ class QuantumODESolverFull(QuantumPKPDBase):
         
         return coverage
     
+    def cost_function(self, params: np.ndarray, data: PKPDData) -> float:
+        """
+        Simple cost function wrapper for abstract method compliance.
+        Delegates to the ODE cost function with encoded data.
+        """
+        try:
+            encoded_data = self.encode_data(data)
+            return self.cost_function_ode(params, encoded_data)
+        except Exception as e:
+            self.logger.log_error("QODE", e, {"context": "cost_function_wrapper"})
+            return np.inf
+
     def _calculate_qode_metrics(self) -> Dict[str, float]:
         """Calculate QODE-specific metrics"""
         if not self.is_trained:

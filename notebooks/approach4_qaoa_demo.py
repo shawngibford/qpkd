@@ -51,9 +51,9 @@ except ImportError:
 import sys
 sys.path.append('/Users/shawngibford/dev/qpkd/src')
 
-from quantum.approach4_qaoa.multi_objective_optimizer_full import MultiObjectiveOptimizerFull
+from quantum.approach4_qaoa.multi_objective_optimizer_full import MultiObjectiveOptimizerFull, QAOAConfig
 from data.data_loader import PKPDDataLoader
-from optimization.population_optimizer import PopulationOptimizer
+# from optimization.population_optimizer import PopulationOptimizer  # Skip for demo
 from utils.logging_system import QuantumPKPDLogger
 
 # Set style
@@ -204,20 +204,38 @@ demo_hamiltonians = [
 
 print("\n1.1 STANDARD QAOA CIRCUIT:")
 print("Classical optimization problems mapped to quantum Hamiltonians")
-qaoa_drawer = qml.draw(qaoa_circuit, expansion_strategy="device")
-print(qaoa_drawer(demo_gammas, demo_betas, demo_cost_hamiltonian, n_layers))
+try:
+    qml.drawer.use_style('pennylane')
+    fig, ax = qml.draw_mpl(qaoa_circuit)(demo_gammas, demo_betas, demo_cost_hamiltonian, n_layers)
+    plt.title("Standard QAOA Circuit")
+    plt.tight_layout()
+    plt.show()
+except Exception as e:
+    print(f"Circuit visualization failed: {e}")
 
 print("\n1.2 MULTI-OBJECTIVE QAOA:")
 print("Weighted combination of multiple cost functions")
-mo_qaoa_drawer = qml.draw(multi_objective_qaoa_circuit, expansion_strategy="device")  
-print(mo_qaoa_drawer(demo_gammas, demo_betas, demo_obj_weights, demo_hamiltonians, n_layers))
+try:
+    qml.drawer.use_style('pennylane')
+    fig, ax = qml.draw_mpl(multi_objective_qaoa_circuit)(demo_gammas, demo_betas, demo_obj_weights, demo_hamiltonians, n_layers)
+    plt.title("Multi-Objective QAOA Circuit")
+    plt.tight_layout()
+    plt.show()
+except Exception as e:
+    print(f"Circuit visualization failed: {e}")
 
 print("\n1.3 CONSTRAINED QAOA:")
 print("Penalty method for handling optimization constraints")
 demo_penalties = [2.0, 1.5]  # Penalty weights
 demo_constraints = [np.random.random(n_qubits), np.random.random(n_qubits)]
-constrained_drawer = qml.draw(constrained_qaoa_circuit, expansion_strategy="device")
-print(constrained_drawer(demo_gammas, demo_betas, demo_penalties, demo_constraints, n_layers))
+try:
+    qml.drawer.use_style('pennylane')
+    fig, ax = qml.draw_mpl(constrained_qaoa_circuit)(demo_gammas, demo_betas, demo_penalties, demo_constraints, n_layers)
+    plt.title("Constrained QAOA Circuit")
+    plt.tight_layout()
+    plt.show()
+except Exception as e:
+    print(f"Circuit visualization failed: {e}")
 
 # ============================================================================
 # SECTION 2: MULTI-OBJECTIVE OPTIMIZATION PROBLEM SETUP
@@ -227,7 +245,7 @@ print("\n\n2. MULTI-OBJECTIVE OPTIMIZATION PROBLEM SETUP")
 print("-"*50)
 
 # Load PK/PD data
-loader = PKPDDataLoader("data/EstData.csv")
+loader = PKPDDataLoader("../data/EstData.csv")
 data = loader.prepare_pkpd_data(weight_range=(50, 100), concomitant_allowed=True)
 
 print(f"Dataset: {len(data.subjects)} subjects for optimization")
@@ -459,13 +477,16 @@ print("\n\n3. QAOA MULTI-OBJECTIVE OPTIMIZATION")
 print("-"*50)
 
 # Initialize QAOA multi-objective optimizer
-qaoa_optimizer = MultiObjectiveOptimizerFull(
+qaoa_config = QAOAConfig(
     n_qubits=8,  # One qubit per dose level
-    qaoa_layers=4,
+    max_iterations=5,  # Reduced for testing
     learning_rate=0.1,
-    max_iterations=100,
-    optimization_method='scipy'
+    convergence_threshold=1e-4
 )
+qaoa_config.hyperparams.qaoa_layers = 4
+qaoa_config.simulation_method = 'classical'  # Use classical simulation for speed
+
+qaoa_optimizer = MultiObjectiveOptimizerFull(qaoa_config)
 
 print(f"QAOA Optimizer Configuration:")
 print(f"• Qubits: {qaoa_optimizer.n_qubits}")
@@ -813,12 +834,16 @@ for obj, value in test_result.items():
         print(f"• {obj.capitalize()}: {value:.3f}")
 
 # QAOA optimization for drug combinations
-combo_qaoa_optimizer = MultiObjectiveOptimizerFull(
-    n_qubits=combo_problem.total_variables,
-    qaoa_layers=3,
+combo_qaoa_config = QAOAConfig(
+    n_qubits=min(combo_problem.total_variables, 8),  # Cap qubits
+    max_iterations=3,  # Reduced for testing
     learning_rate=0.1,
-    max_iterations=80
+    convergence_threshold=1e-4
 )
+combo_qaoa_config.hyperparams.qaoa_layers = 3
+combo_qaoa_config.simulation_method = 'classical'
+
+combo_qaoa_optimizer = MultiObjectiveOptimizerFull(combo_qaoa_config)
 
 print(f"\nOptimizing drug combinations with QAOA...")
 
@@ -1023,12 +1048,16 @@ for question_name, config in challenge_questions.items():
     )
     
     # Initialize QAOA optimizer for this scenario
-    scenario_qaoa = MultiObjectiveOptimizerFull(
+    scenario_qaoa_config = QAOAConfig(
         n_qubits=8,
-        qaoa_layers=4,
+        max_iterations=3,  # Reduced for testing
         learning_rate=0.05,
-        max_iterations=80
+        convergence_threshold=1e-4
     )
+    scenario_qaoa_config.hyperparams.qaoa_layers = 4
+    scenario_qaoa_config.simulation_method = 'classical'
+    
+    scenario_qaoa = MultiObjectiveOptimizerFull(scenario_qaoa_config)
     
     # Define optimization objective for this challenge
     challenge_weights = {
@@ -1057,8 +1086,8 @@ for question_name, config in challenge_questions.items():
     
     qaoa_challenge_results[question_name] = result
     
-    print(f"  Optimal daily dose: {result.daily_dose:.2f} mg")
-    print(f"  Optimal weekly dose: {result.weekly_dose:.2f} mg")
+    print(f"  Optimal daily dose: {result.optimal_daily_dose:.2f} mg")
+    print(f"  Optimal weekly dose: {result.optimal_weekly_dose:.2f} mg")
     print(f"  Coverage achieved: {result.coverage_achieved:.1%}")
 
 # Compare QAOA with classical optimization methods
@@ -1084,7 +1113,7 @@ short_q_names = ['Q1', 'Q2', 'Q3', 'Q4', 'Q5']
 daily_questions = [q for q in question_names if 'Weekly' not in q]
 daily_short_names = [short_q_names[i] for i, q in enumerate(question_names) if 'Weekly' not in q]
 
-qaoa_daily_doses = [qaoa_challenge_results[q].daily_dose for q in daily_questions]
+qaoa_daily_doses = [qaoa_challenge_results[q].optimal_daily_dose for q in daily_questions]
 classical_daily_doses = [classical_challenge_results[q]['daily_dose'] for q in daily_questions]
 
 x_pos = np.arange(len(daily_questions))
@@ -1184,10 +1213,10 @@ for q_name in question_names:
     
     print(f"\n• {q_name}:")
     if 'Weekly' in q_name:
-        print(f"    QAOA Weekly: {qaoa_result.weekly_dose:.1f} mg, Coverage: {qaoa_result.coverage_achieved:.1%}")
+        print(f"    QAOA Weekly: {qaoa_result.optimal_weekly_dose:.1f} mg, Coverage: {qaoa_result.population_coverage:.1%}")
         print(f"    Classical Weekly: {classical_result['weekly_dose']:.1f} mg, Coverage: {classical_result['coverage']:.1%}")
     else:
-        print(f"    QAOA Daily: {qaoa_result.daily_dose:.1f} mg, Coverage: {qaoa_result.coverage_achieved:.1%}")
+        print(f"    QAOA Daily: {qaoa_result.optimal_daily_dose:.1f} mg, Coverage: {qaoa_result.population_coverage:.1%}")
         print(f"    Classical Daily: {classical_result['daily_dose']:.1f} mg, Coverage: {classical_result['coverage']:.1%}")
 
 # ============================================================================
@@ -1213,9 +1242,9 @@ print(f"\nCHALLENGE QUESTION ANSWERS (QAOA):")
 print("-" * 50)
 for question, result in qaoa_challenge_results.items():
     if 'Weekly' in question:
-        print(f"• {question}: {result.weekly_dose:.1f} mg/week")
+        print(f"• {question}: {result.optimal_weekly_dose:.1f} mg/week")
     else:
-        print(f"• {question}: {result.daily_dose:.1f} mg/day")
+        print(f"• {question}: {result.optimal_daily_dose:.1f} mg/day")
 
 print(f"\nDRUG COMBINATION INSIGHTS:")
 print("-" * 50)

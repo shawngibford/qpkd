@@ -67,7 +67,7 @@ class QuantumPKPDBase(ABC):
         self.is_trained = False
         
     @abstractmethod
-    def setup_quantum_device(self) -> qml.Device:
+    def setup_quantum_device(self) -> qml.device:
         """Setup PennyLane quantum device"""
         pass
     

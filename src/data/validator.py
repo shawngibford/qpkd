@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Tuple, Any
 import logging
 import warnings
 
-from ..quantum.core.data_structures import PKPDData
+from quantum.core.base import PKPDData
 
 
 class DataValidator:

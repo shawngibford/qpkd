@@ -38,7 +38,7 @@ class QuantumNeuralNetwork(QuantumPKPDBase):
         
         # Placeholder methods - full implementation would go here
         
-    def setup_quantum_device(self) -> qml.Device:
+    def setup_quantum_device(self) -> qml.device:
         """Setup quantum device for QNN"""
         # Implementation placeholder
         pass

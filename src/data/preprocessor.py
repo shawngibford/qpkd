@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split
 from typing import Dict, Tuple, Optional, List
 import logging
 
-from ..quantum.core.data_structures import PKPDData
+from quantum.core.base import PKPDData
 
 
 class DataPreprocessor:
@@ -70,13 +70,20 @@ class DataPreprocessor:
             scaled_valid_bio = self.biomarker_scaler.fit_transform(valid_bio)
             scaled_biomarkers[bio_mask] = scaled_valid_bio.flatten()
             
-        return PKPDData(
+        # Create processed data object with correct attributes
+        processed_data = type(data)(  # Use same class as input
             subjects=data.subjects,
             features=scaled_features,
             concentrations=scaled_concentrations,
             biomarkers=scaled_biomarkers,
-            metadata={**data.metadata, 'scaled': True, 'scaling_method': self.scaling_method}
+            time_points=data.time_points,
+            doses=data.doses,
+            body_weights=data.body_weights,
+            concomitant_meds=data.concomitant_meds
         )
+        # Update metadata
+        processed_data.metadata = {**data.metadata, 'scaled': True, 'scaling_method': self.scaling_method}
+        return processed_data
         
     def transform(self, data: PKPDData) -> PKPDData:
         """Transform data using fitted scalers.
@@ -109,13 +116,20 @@ class DataPreprocessor:
             scaled_valid_bio = self.biomarker_scaler.transform(valid_bio)
             scaled_biomarkers[bio_mask] = scaled_valid_bio.flatten()
             
-        return PKPDData(
+        # Create processed data object with correct attributes
+        processed_data = type(data)(  # Use same class as input
             subjects=data.subjects,
             features=scaled_features,
             concentrations=scaled_concentrations,
             biomarkers=scaled_biomarkers,
-            metadata={**data.metadata, 'scaled': True, 'scaling_method': self.scaling_method}
+            time_points=data.time_points,
+            doses=data.doses,
+            body_weights=data.body_weights,
+            concomitant_meds=data.concomitant_meds
         )
+        # Update metadata
+        processed_data.metadata = {**data.metadata, 'scaled': True, 'scaling_method': self.scaling_method}
+        return processed_data
         
     def inverse_transform_biomarkers(self, scaled_biomarkers: np.ndarray) -> np.ndarray:
         """Inverse transform biomarker predictions back to original scale.
@@ -153,22 +167,30 @@ class DataPreprocessor:
         )
         
         # Create training data
-        train_data = PKPDData(
+        train_data = type(data)(
             subjects=[data.subjects[i] for i in train_indices],
             features=data.features[train_indices],
             concentrations=data.concentrations[train_indices],
             biomarkers=data.biomarkers[train_indices],
-            metadata={**data.metadata, 'split': 'train', 'n_subjects': len(train_indices)}
+            time_points=data.time_points[train_indices],
+            doses=data.doses[train_indices],
+            body_weights=data.body_weights[train_indices],
+            concomitant_meds=data.concomitant_meds[train_indices]
         )
+        train_data.metadata = {**data.metadata, 'split': 'train', 'n_subjects': len(train_indices)}
         
         # Create testing data
-        test_data = PKPDData(
+        test_data = type(data)(
             subjects=[data.subjects[i] for i in test_indices],
             features=data.features[test_indices],
             concentrations=data.concentrations[test_indices],
             biomarkers=data.biomarkers[test_indices],
-            metadata={**data.metadata, 'split': 'test', 'n_subjects': len(test_indices)}
+            time_points=data.time_points[test_indices],
+            doses=data.doses[test_indices],
+            body_weights=data.body_weights[test_indices],
+            concomitant_meds=data.concomitant_meds[test_indices]
         )
+        test_data.metadata = {**data.metadata, 'split': 'test', 'n_subjects': len(test_indices)}
         
         return train_data, test_data
         
@@ -207,13 +229,19 @@ class DataPreprocessor:
             augmented_concentrations = np.vstack([augmented_concentrations, noise_concentrations])
             augmented_biomarkers = np.vstack([augmented_biomarkers, noise_biomarkers])
             
-        return PKPDData(
+        # Create augmented data object
+        augmented_data = type(data)(
             subjects=augmented_subjects,
             features=augmented_features,
             concentrations=augmented_concentrations,
             biomarkers=augmented_biomarkers,
-            metadata={**data.metadata, 'augmented': True, 'augmentation_factor': augmentation_factor}
+            time_points=np.tile(data.time_points, (augmentation_factor, 1)),
+            doses=np.tile(data.doses, (augmentation_factor, 1)),
+            body_weights=np.tile(data.body_weights, augmentation_factor),
+            concomitant_meds=np.tile(data.concomitant_meds, augmentation_factor)
         )
+        augmented_data.metadata = {**data.metadata, 'augmented': True, 'augmentation_factor': augmentation_factor}
+        return augmented_data
         
     def create_time_series_windows(self, 
                                   data: PKPDData, 
@@ -261,10 +289,16 @@ class DataPreprocessor:
             padded_conc[i, :len(conc)] = conc
             padded_bio[i, :len(bio)] = bio
             
-        return PKPDData(
+        # Create windowed data object
+        windowed_data = type(data)(
             subjects=windowed_subjects,
             features=np.array(windowed_features),
             concentrations=padded_conc,
             biomarkers=padded_bio,
-            metadata={**data.metadata, 'windowed': True, 'window_size': window_size}
+            time_points=data.time_points[:len(windowed_subjects)],  # Truncate to match windowed data
+            doses=data.doses[:len(windowed_subjects)],
+            body_weights=data.body_weights[:len(windowed_subjects)],
+            concomitant_meds=data.concomitant_meds[:len(windowed_subjects)]
         )
+        windowed_data.metadata = {**data.metadata, 'windowed': True, 'window_size': window_size}
+        return windowed_data

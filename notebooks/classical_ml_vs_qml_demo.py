@@ -18,6 +18,9 @@ Objectives:
 
 import numpy as np
 import pandas as pd
+# Configure matplotlib for headless environments
+import matplotlib
+matplotlib.use('Agg')  # Set non-interactive backend to prevent hanging
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.ensemble import RandomForestRegressor
@@ -29,6 +32,9 @@ from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 import pennylane as qml
 from pennylane import numpy as pnp
 import warnings
+import time
+import signal
+import gc
 warnings.filterwarnings('ignore')
 
 # Optional R/ggplot2 support
@@ -65,7 +71,8 @@ class ClassicalMLPredictor:
         self.models = {
             'random_forest': RandomForestRegressor(n_estimators=100, random_state=42),
             'neural_network': MLPRegressor(hidden_layer_sizes=(100, 50), 
-                                         max_iter=1000, random_state=42),
+                                         max_iter=2000, random_state=42, 
+                                         early_stopping=True, validation_fraction=0.1),
             'svm': SVR(kernel='rbf', gamma='scale')
         }
         self.scaler = StandardScaler()
@@ -143,23 +150,38 @@ class QuantumMLPredictor:
     def __init__(self, n_qubits=6, n_layers=3):
         self.n_qubits = n_qubits
         self.n_layers = n_layers
-        self.dev = qml.device('default.qubit', wires=n_qubits)
+        # Use finite shots to prevent runaway computations
+        self.dev = qml.device('default.qubit', wires=n_qubits, shots=1000)
         self.weights = None
         self.scaler = StandardScaler()
+        self.training_costs = []
         
     def data_reuploading_circuit(self, weights, x):
         """Quantum circuit with data reuploading for PK/PD prediction"""
         
+        # Ensure x is proper array
+        if not isinstance(x, np.ndarray):
+            x = np.array(x, dtype=float)
+        
         # Encode input features
         for i in range(min(len(x), self.n_qubits)):
-            qml.RY(x[i], wires=i)
+            qml.RY(float(x[i]), wires=i)
             
         # Variational layers with data reuploading
         for layer in range(self.n_layers):
             # Parameterized gates
             for i in range(self.n_qubits):
-                qml.RY(weights[layer, i, 0], wires=i)
-                qml.RZ(weights[layer, i, 1], wires=i)
+                # Handle both list and array indexing
+                try:
+                    w1 = weights[layer, i, 0]
+                    w2 = weights[layer, i, 1]
+                except (TypeError, IndexError):
+                    # Fallback for list format
+                    w1 = weights[layer][i][0]
+                    w2 = weights[layer][i][1]
+                    
+                qml.RY(float(np.asarray(w1).item()), wires=i)
+                qml.RZ(float(np.asarray(w2).item()), wires=i)
             
             # Entangling gates
             for i in range(self.n_qubits - 1):
@@ -167,11 +189,16 @@ class QuantumMLPredictor:
             
             # Data reuploading (reduced intensity)
             for i in range(min(len(x), self.n_qubits)):
-                qml.RY(0.1 * x[i], wires=i)
+                qml.RY(float(0.1 * x[i]), wires=i)
         
         # Final parameterized layer
         for i in range(self.n_qubits):
-            qml.RY(weights[self.n_layers, i, 0], wires=i)
+            # Handle both list and array indexing
+            try:
+                w = weights[self.n_layers, i, 0]
+            except (TypeError, IndexError):
+                w = weights[self.n_layers][i][0]
+            qml.RY(float(np.asarray(w).item()), wires=i)
             
         return [qml.expval(qml.PauliZ(i)) for i in range(min(4, self.n_qubits))]
     
@@ -183,7 +210,7 @@ class QuantumMLPredictor:
         
         return circuit
     
-    def train_qml_model(self, X, y, learning_rate=0.1, epochs=100):
+    def train_qml_model(self, X, y, learning_rate=0.01, epochs=20, max_time=300):
         """Train quantum ML model"""
         print("\nTraining QUANTUM ML model...")
         
@@ -212,25 +239,70 @@ class QuantumMLPredictor:
             
             return np.mean((predictions - y_batch) ** 2)
         
-        # Training loop
-        optimizer = qml.AdamOptimizer(stepsize=learning_rate)
-        costs = []
+        # Training loop with timeout protection
+        def timeout_handler(signum, frame):
+            raise TimeoutError("Training timeout")
         
-        for epoch in range(epochs):
-            # Mini-batch training
-            batch_size = min(32, len(X_scaled))
-            indices = np.random.choice(len(X_scaled), batch_size, replace=False)
-            X_batch = X_scaled[indices]
-            y_batch = y[indices]
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(max_time)
+        
+        try:
+            optimizer = qml.AdamOptimizer(stepsize=learning_rate)
+            costs = []
+            start_time = time.time()
             
-            # Update weights
-            self.weights, cost = optimizer.step_and_cost(
-                cost_function, self.weights, X_batch, y_batch
-            )
-            costs.append(cost)
+            print(f"  Starting QML training with {epochs} max epochs, {max_time}s timeout...")
             
-            if epoch % 20 == 0:
-                print(f"  Epoch {epoch:3d}: Cost = {cost:.6f}")
+            for epoch in range(epochs):
+                # Mini-batch training
+                batch_size = min(32, len(X_scaled))
+                indices = np.random.choice(len(X_scaled), batch_size, replace=False)
+                X_batch = X_scaled[indices]
+                y_batch = y[indices]
+                
+                # Update weights using step_and_cost for monitoring
+                self.weights, cost = optimizer.step_and_cost(
+                    cost_function, self.weights, X_batch, y_batch
+                )
+                costs.append(cost)
+                
+                # Monitor for NaN/Inf values that cause hangs
+                if not np.isfinite(cost):
+                    print(f"  Invalid cost detected at epoch {epoch}, stopping")
+                    break
+                
+                # Check convergence (cost improvement)
+                if epoch > 5:
+                    recent_improvement = abs(costs[-5] - costs[-1])
+                    if recent_improvement < 1e-6:
+                        print(f"  Converged at epoch {epoch}")
+                        break
+                
+                # Periodic optimizer reset and memory cleanup
+                if epoch % 10 == 0:
+                    if epoch > 0:
+                        optimizer.reset()  # Clear accumulated moments
+                    gc.collect()  # Clean memory
+                
+                # Progress reporting
+                if epoch % 5 == 0 or epoch < 5:
+                    elapsed = time.time() - start_time
+                    print(f"  Epoch {epoch:3d}: Cost = {cost:.6f} (elapsed: {elapsed:.1f}s)")
+                
+                # Time-based early stopping  
+                if time.time() - start_time > max_time * 0.9:
+                    print("  Approaching timeout, stopping early")
+                    break
+            
+            self.training_costs = costs
+            print(f"  QML training completed in {time.time() - start_time:.1f}s")
+            
+        except TimeoutError:
+            print(f"  QML training timed out after {max_time}s")
+            if not costs:
+                costs = [float('inf')]  # Ensure costs is not empty
+        finally:
+            signal.alarm(0)  # Cancel alarm
         
         return costs
     
@@ -251,30 +323,40 @@ class QuantumMLPredictor:
         return np.array(predictions)
     
     def draw_circuit(self):
-        """Draw the quantum circuit"""
+        """Draw the quantum circuit with safe error handling"""
         print("\n" + "="*50)
         print("QUANTUM ML CIRCUIT ARCHITECTURE")
         print("="*50)
         
-        # Create a sample input for circuit drawing
-        sample_x = np.random.randn(self.n_qubits) * 0.1
-        sample_weights = np.random.randn(self.n_layers + 1, self.n_qubits, 2) * 0.1
-        
-        @qml.qnode(self.dev)
-        def circuit_to_draw(weights, x):
-            return self.data_reuploading_circuit(weights, x)
-        
-        # Draw circuit
-        circuit_to_draw(sample_weights, sample_x)
-        
-        print("\nQuantum Circuit Structure:")
-        print(qml.draw(circuit_to_draw, expansion_strategy='device')(sample_weights, sample_x))
-        
-        # Create circuit visualization
-        fig, qml.draw_mpl(circuit_to_draw, expansion_strategy='device')(sample_weights, sample_x)
-        plt.title("Quantum ML Circuit with Data Reuploading\nfor PK/PD Prediction")
-        plt.tight_layout()
-        plt.show()
+        try:
+            # Create a sample input for circuit drawing
+            sample_x = np.random.randn(self.n_qubits) * 0.1
+            sample_weights = np.random.randn(self.n_layers + 1, self.n_qubits, 2) * 0.1
+            
+            @qml.qnode(self.dev)
+            def circuit_to_draw(weights, x):
+                return self.data_reuploading_circuit(weights, x)
+            
+            # Draw circuit with timeout protection
+            print("Circuit structure:")
+            print(f"  - {self.n_qubits} qubits")
+            print(f"  - {self.n_layers} variational layers") 
+            print(f"  - Data reuploading enabled")
+            print(f"  - Device: {getattr(self.dev, 'name', 'quantum_device')} with {getattr(self.dev, 'shots', 'infinite')} shots")
+            
+            # Attempt to draw circuit (may fail in some environments)
+            try:
+                circuit_drawing = qml.draw(circuit_to_draw, show_matrices=False)
+                drawing_result = circuit_drawing(sample_weights, sample_x)
+                print("\nCircuit diagram:")
+                print(drawing_result)
+            except Exception as draw_error:
+                print(f"\nCircuit diagram unavailable (display error): {draw_error}")
+                print("Circuit drawing skipped - functionality preserved")
+                
+        except Exception as e:
+            print(f"Circuit drawing failed: {e}")
+            print("Skipping circuit visualization - training will proceed normally")
 
 def generate_pkpd_dataset():
     """Generate synthetic PK/PD dataset for ML comparison"""
@@ -402,8 +484,11 @@ def create_comparison_visualizations(results_df, classical_ml, qml_predictor):
     print("CREATING COMPARISON VISUALIZATIONS")
     print("="*50)
     
-    # Set up the plotting style
-    plt.style.use('seaborn-v0_8')
+    # Set up the plotting style (safe fallback)
+    try:
+        plt.style.use('seaborn-v0_8')
+    except Exception:
+        plt.style.use('default')
     fig = plt.figure(figsize=(20, 15))
     
     # 1. Performance comparison bar plot
@@ -529,7 +614,9 @@ def create_comparison_visualizations(results_df, classical_ml, qml_predictor):
     ax6.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.show()
+    plt.savefig('classical_vs_quantum_ml_comparison.png', dpi=150, bbox_inches='tight')
+    plt.close()  # Close to prevent memory leaks
+    print("✓ Visualizations saved as 'classical_vs_quantum_ml_comparison.png'")
     
     # Create R visualization if available
     if R_AVAILABLE:
@@ -704,7 +791,7 @@ def main():
     qml_predictor.draw_circuit()
     
     # Train QML model
-    training_costs = qml_predictor.train_qml_model(X_train, y_train, epochs=50)
+    training_costs = qml_predictor.train_qml_model(X_train, y_train, epochs=20, max_time=120)
     
     # Make predictions
     qml_predictions = qml_predictor.predict(X_test)

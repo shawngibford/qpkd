@@ -18,6 +18,9 @@ Objectives:
 
 import numpy as np
 import pandas as pd
+# Configure matplotlib for headless environments
+import matplotlib
+matplotlib.use('Agg')  # Set non-interactive backend to prevent hanging
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.optimize import minimize, differential_evolution
@@ -28,6 +31,9 @@ from pennylane import numpy as pnp
 import networkx as nx
 from itertools import combinations
 import warnings
+import time
+import signal
+import gc
 warnings.filterwarnings('ignore')
 
 # Optional R/ggplot2 support
@@ -49,9 +55,27 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from data.data_loader import PKPDDataLoader
-from optimization.dosing_optimizer import DosingOptimizer
-from pkpd.compartment_models import OneCompartmentModel
+# Import project modules with safe error handling
+try:
+    from data.data_loader import PKPDDataLoader
+    print("✓ PKPDDataLoader imported")
+except ImportError as e:
+    print(f"⚠ PKPDDataLoader import failed: {e}")
+    PKPDDataLoader = None
+
+try:
+    from optimization.dosing_optimizer import DosingOptimizer
+    print("✓ DosingOptimizer imported")
+except ImportError as e:
+    print(f"⚠ DosingOptimizer import failed: {e}")
+    DosingOptimizer = None
+
+try:
+    from pkpd.compartment_models import OneCompartmentModel
+    print("✓ OneCompartmentModel imported")
+except ImportError as e:
+    print(f"⚠ OneCompartmentModel import failed: {e}")
+    OneCompartmentModel = None
 
 print("=" * 80)
 print("CLASSICAL OPTIMIZATION vs QUANTUM OPTIMIZATION COMPARISON")
@@ -456,7 +480,9 @@ class QuantumOptimizer:
             for i in range(self.n_qubits):
                 qml.RX(2 * beta, wires=i)
         
-        return [qml.expval(qml.PauliZ(i)) for i in range(self.n_qubits)]
+        # Create Hamiltonian and return its expectation value
+        hamiltonian = qml.Hamiltonian(coeffs, obs)
+        return qml.expval(hamiltonian)
     
     def run_qaoa_optimization(self, patient_params, n_days=4, max_iterations=100):
         """Run QAOA optimization for dose finding"""
@@ -469,43 +495,113 @@ class QuantumOptimizer:
         # Create quantum node
         @qml.qnode(self.dev)
         def cost_function(params):
-            expectation_values = self.qaoa_circuit(params, coeffs, obs)
-            
-            # Calculate total cost from expectation values
-            total_cost = 0
-            for coeff, exp_val in zip(coeffs[:len(expectation_values)], expectation_values):
-                total_cost += coeff * exp_val
-                
-            return total_cost
+            return self.qaoa_circuit(params, coeffs, obs)
         
         # Initialize parameters
         np.random.seed(42)
         initial_params = np.random.uniform(0, 2*np.pi, 2 * self.n_layers)
         
-        # Optimization
-        optimizer = qml.AdamOptimizer(stepsize=0.1)
+        # Optimization with timeout protection
+        def timeout_handler(signum, frame):
+            raise TimeoutError("QAOA optimization timeout")
         
-        params = initial_params
-        costs = []
-        param_history = []
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(180)  # 3-minute timeout
         
-        print(f"  Starting QAOA with {self.n_layers} layers, {self.n_qubits} qubits")
-        
-        for iteration in range(max_iterations):
-            params, cost = optimizer.step_and_cost(cost_function, params)
-            costs.append(cost)
-            param_history.append(params.copy())
+        try:
+            optimizer = qml.AdamOptimizer(stepsize=0.01)  # Reduced learning rate for stability
             
-            if iteration % 20 == 0:
-                print(f"  Iteration {iteration}: Cost = {cost:.6f}")
+            params = initial_params
+            costs = []
+            param_history = []
+            start_time = time.time()
+            
+            print(f"  Starting QAOA with {self.n_layers} layers, {self.n_qubits} qubits")
+            print(f"  Timeout: 180s, Max iterations: {max_iterations}")
+            
+            for iteration in range(max_iterations):
+                # Update parameters with error checking
+                params, cost = optimizer.step_and_cost(cost_function, params)
+                costs.append(cost)
+                param_history.append(params.copy())
+                
+                # Monitor for NaN/Inf values
+                if not np.isfinite(cost):
+                    print(f"  Invalid cost detected at iteration {iteration}, stopping")
+                    break
+                
+                # Convergence check
+                if iteration > 10:
+                    recent_improvement = abs(costs[-10] - costs[-1])
+                    if recent_improvement < 1e-6:
+                        print(f"  Converged at iteration {iteration}")
+                        break
+                
+                # Periodic optimizer reset
+                if iteration % 50 == 0 and iteration > 0:
+                    optimizer.reset()
+                    gc.collect()
+                
+                # Progress reporting
+                if iteration % 20 == 0:
+                    elapsed = time.time() - start_time
+                    print(f"  Iteration {iteration}: Cost = {cost:.6f} (elapsed: {elapsed:.1f}s)")
+                
+                # Time-based early stopping
+                if time.time() - start_time > 150:  # 2.5 minutes
+                    print("  Approaching timeout, stopping early")
+                    break
+                    
+            print(f"  QAOA optimization completed in {time.time() - start_time:.1f}s")
+            
+        except TimeoutError:
+            print("  QAOA optimization timed out")
+            if not costs:
+                costs = [float('inf')]
+        except Exception as e:
+            print(f"  QAOA optimization failed: {e}")
+            if not costs:
+                costs = [float('inf')]
+        finally:
+            signal.alarm(0)  # Cancel alarm
         
         # Get final quantum state and extract solution
         @qml.qnode(self.dev)
-        def final_circuit(params):
-            self.qaoa_circuit(params, coeffs, obs)
+        def final_state_circuit(params):
+            # Reproduce the QAOA circuit without measurements
+            gammas = params[:self.n_layers]
+            betas = params[self.n_layers:2*self.n_layers]
+            
+            # Initial state: equal superposition
+            for i in range(self.n_qubits):
+                qml.Hadamard(wires=i)
+            
+            # QAOA layers
+            for layer in range(self.n_layers):
+                # Cost Hamiltonian evolution
+                gamma = gammas[layer]
+                for coeff, observable in zip(coeffs, obs):
+                    if hasattr(observable, 'wires'):
+                        # Single Pauli operator
+                        if str(observable).startswith('PauliZ'):
+                            wire = observable.wires[0]
+                            qml.RZ(2 * gamma * coeff, wires=wire)
+                        elif hasattr(observable, 'obs'):
+                            # Tensor product of Pauli operators
+                            # For simplicity, implement ZZ interaction
+                            if len(observable.wires) == 2:
+                                qml.CNOT(wires=observable.wires)
+                                qml.RZ(2 * gamma * coeff, wires=observable.wires[1])
+                                qml.CNOT(wires=observable.wires)
+                
+                # Mixer Hamiltonian evolution
+                beta = betas[layer]
+                for i in range(self.n_qubits):
+                    qml.RX(2 * beta, wires=i)
+            
             return qml.state()
         
-        final_state = final_circuit(params)
+        final_state = final_state_circuit(params)
         
         # Extract most probable bitstring
         probabilities = np.abs(final_state) ** 2
@@ -571,15 +667,33 @@ class QuantumOptimizer:
         def circuit_to_draw(params):
             return self.qaoa_circuit(params, coeffs, obs)
         
-        print("\nQAOA Circuit Structure:")
-        print(qml.draw(circuit_to_draw, expansion_strategy='device')(sample_params))
+        try:
+            print("\nQAOA Circuit Structure:")
+            circuit_text = qml.draw(circuit_to_draw, expansion_strategy='device', max_length=80)(sample_params)
+            print(circuit_text)
+            print(f"\nCircuit Info:")
+            print(f"  - {self.n_qubits} qubits")
+            print(f"  - {self.n_layers} QAOA layers")
+            print(f"  - Device: {getattr(self.dev, 'name', 'quantum_device')}")
+        except Exception as draw_error:
+            print(f"\nCircuit text drawing failed: {draw_error}")
+            print("Circuit structure (fallback):")
+            print(f"  - {self.n_qubits} qubits")
+            print(f"  - {self.n_layers} QAOA layers") 
+            print("  - Alternating cost/mixer layers")
         
-        # Create circuit visualization
-        fig, ax = plt.subplots(figsize=(12, 6))
-        qml.draw_mpl(circuit_to_draw, expansion_strategy='device')(sample_params)
-        plt.title("QAOA Circuit for PK/PD Dose Optimization")
-        plt.tight_layout()
-        plt.show()
+        # Create circuit visualization with safe error handling
+        try:
+            fig, ax = plt.subplots(figsize=(12, 6))
+            qml.draw_mpl(circuit_to_draw, expansion_strategy='device')(sample_params)
+            plt.title("QAOA Circuit for PK/PD Dose Optimization")
+            plt.tight_layout()
+            plt.savefig('qaoa_circuit_diagram.png', dpi=150, bbox_inches='tight')
+            plt.close()  # Close to prevent memory leaks
+            print("✓ QAOA circuit diagram saved as 'qaoa_circuit_diagram.png'")
+        except Exception as viz_error:
+            print(f"Circuit visualization failed: {viz_error}")
+            print("Circuit diagram skipped - functionality preserved")
 
 def compare_optimization_methods():
     """Compare classical and quantum optimization approaches"""
@@ -790,12 +904,17 @@ def create_optimization_visualizations(results):
             if method in results[scenario]:
                 method_costs[method_labels[i]].append(results[scenario][method]['cost'])
     
-    positions = range(len(method_labels))
-    violin_parts = ax5.violinplot([method_costs[label] for label in method_labels], 
-                                 positions, showmeans=True)
-    
-    ax5.set_xticks(positions)
-    ax5.set_xticklabels(method_labels)
+    # Filter out methods with empty cost arrays
+    valid_methods = [(label, method_costs[label]) for label in method_labels if method_costs[label]]
+    if valid_methods:
+        valid_labels, valid_costs = zip(*valid_methods)
+        positions = range(len(valid_labels))
+        violin_parts = ax5.violinplot(list(valid_costs), positions, showmeans=True)
+        ax5.set_xticks(positions)
+        ax5.set_xticklabels(valid_labels)
+    else:
+        ax5.text(0.5, 0.5, 'No optimization data available', 
+                transform=ax5.transAxes, ha='center', va='center')
     ax5.set_ylabel('Optimization Cost')
     ax5.set_title('Solution Quality Distribution')
     ax5.grid(True, alpha=0.3)
@@ -839,7 +958,9 @@ def create_optimization_visualizations(results):
     ax6.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.show()
+    plt.savefig('optimization_comparison.png', dpi=150, bbox_inches='tight')
+    plt.close()  # Close to prevent memory leaks
+    print("✓ Optimization comparison plots saved as 'optimization_comparison.png'")
     
     # Create R visualization if available
     if R_AVAILABLE:

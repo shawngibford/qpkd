@@ -12,11 +12,11 @@ Key Features:
 """
 
 from .qubo_formulator import QUBOFormulator
-from .multi_objective_optimizer import MultiObjectiveOptimizer
-from .population_scenario_analyzer import PopulationScenarioAnalyzer
+from .multi_objective_optimizer_full import MultiObjectiveOptimizerFull
+# from .population_scenario_analyzer import PopulationScenarioAnalyzer  # Missing file
 
 __all__ = [
     'QUBOFormulator',
-    'MultiObjectiveOptimizer',
-    'PopulationScenarioAnalyzer'
+    'MultiObjectiveOptimizerFull',
+    # 'PopulationScenarioAnalyzer'
 ]

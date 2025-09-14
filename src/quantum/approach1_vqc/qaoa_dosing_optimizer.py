@@ -53,7 +53,7 @@ class QAOADosingOptimizer:
                 'variability': 0.3    # Minimize variability
             }
             
-    def setup_quantum_device(self, n_qubits: int) -> qml.Device:
+    def setup_quantum_device(self, n_qubits: int) -> qml.device:
         """Setup quantum device for QAOA"""
         self.device = qml.device("default.qubit", wires=n_qubits)
         return self.device

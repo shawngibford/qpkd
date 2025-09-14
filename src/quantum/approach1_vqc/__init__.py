@@ -12,11 +12,14 @@ Key Features:
 """
 
 from .vqc_parameter_estimator import VQCParameterEstimator
+from .vqc_parameter_estimator_full import VQCParameterEstimatorFull, VQCConfig
 from .qaoa_dosing_optimizer import QAOADosingOptimizer  
-from .vqe_pkpd_solver import VQEPKPDSolver
+# from .vqe_pkpd_solver import VQEPKPDSolver  # Missing file
 
 __all__ = [
     'VQCParameterEstimator',
+    'VQCParameterEstimatorFull',
+    'VQCConfig',
     'QAOADosingOptimizer', 
-    'VQEPKPDSolver'
+    # 'VQEPKPDSolver'
 ]

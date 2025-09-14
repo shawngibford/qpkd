@@ -8,7 +8,7 @@ from typing import Dict, List, Tuple, Callable, Optional, Any
 import logging
 from dataclasses import dataclass
 
-from ..quantum.core.data_structures import DosingResults
+from ..utils.logging_system import DosingResults
 
 
 @dataclass

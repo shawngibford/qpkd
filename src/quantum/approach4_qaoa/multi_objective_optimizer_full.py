@@ -14,7 +14,7 @@ from scipy.optimize import minimize, differential_evolution
 from itertools import product
 
 from ..core.base import QuantumPKPDBase, ModelConfig, PKPDData, OptimizationResult
-from ...utils.logging_system import QuantumPKPDLogger, DosingResults
+from utils.logging_system import QuantumPKPDLogger, DosingResults
 
 
 @dataclass
@@ -72,19 +72,44 @@ class MultiObjectiveOptimizerFull(QuantumPKPDBase):
         # Population modeling (simplified for QAOA)
         self.population_model = None
         
-    def setup_quantum_device(self) -> qml.Device:
+        # Initialize device immediately
+        self.setup_quantum_device()
+        
+    @property
+    def n_qubits(self):
+        """Number of qubits for QAOA"""
+        return self._calculate_required_qubits()
+        
+    @property
+    def qaoa_layers(self):
+        """Number of QAOA layers"""
+        return self.qaoa_config.hyperparams.qaoa_layers
+        
+    @property
+    def learning_rate(self):
+        """Learning rate for optimization"""
+        return self.qaoa_config.hyperparams.learning_rate
+        
+    def setup_quantum_device(self) -> qml.device:
         """Setup device for QAOA"""
         n_qubits = self._calculate_required_qubits()
         
         try:
-            self.device = qml.device("default.qubit", wires=n_qubits, shots=1000)
+            # Use exact simulation for QAOA (no shots for deterministic results)
+            self.device = qml.device("default.qubit", wires=n_qubits, shots=None)
             self.logger.logger.info(f"QAOA device setup: {n_qubits} qubits")
             return self.device
         except Exception as e:
             self.logger.log_error("QAOA", e, {"context": "device_setup"})
-            # Use classical simulation
-            self.qaoa_config.simulation_method = "classical"
-            return None
+            # Fallback to minimal device
+            try:
+                self.device = qml.device("default.qubit", wires=max(4, n_qubits), shots=None)
+                self.logger.logger.warning("Using fallback device setup")
+                return self.device
+            except Exception as fallback_error:
+                # Use classical simulation as last resort
+                self.qaoa_config.simulation_method = "classical"
+                return None
     
     def _calculate_required_qubits(self) -> int:
         """Calculate number of qubits needed for dose encoding"""
@@ -682,3 +707,16 @@ class MultiObjectiveOptimizerFull(QuantumPKPDBase):
             'global_optimization': 1.0 if self.qaoa_config.simulation_method == "quantum" else 0.5,
             'pareto_efficiency': len(self.pareto_solutions) / max(len(self.optimal_solutions), 1)
         }
+    
+    def cost_function(self, params: np.ndarray, data: PKPDData) -> float:
+        """
+        Simple cost function wrapper for abstract method compliance.
+        For QAOA, this is a simple wrapper since optimization is done via QUBO.
+        """
+        try:
+            # QAOA uses discrete optimization, so we just return a simple cost based on parameters
+            # This is mainly for interface compliance
+            return np.sum(params**2)  # Simple quadratic cost
+        except Exception as e:
+            self.logger.log_error("QAOA", e, {"context": "cost_function_wrapper"})
+            return np.inf

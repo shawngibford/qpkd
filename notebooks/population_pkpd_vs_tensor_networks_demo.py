@@ -559,7 +559,7 @@ class TensorNetworkPKPD:
         self.population_tensor = subject_encodings
         return subject_encodings
     
-    def optimize_tensor_network(self, data, max_iterations=50, learning_rate=0.01):
+    def optimize_tensor_network(self, data, max_iterations=10, learning_rate=0.01):
         """Optimize tensor network parameters using variational approach"""
         
         print("Optimizing tensor network parameters...")
@@ -833,7 +833,7 @@ def compare_population_methods():
     print("1. Generating population PK/PD data...")
     classical_model = ClassicalPopulationPKPD()
     population_data = classical_model.generate_population_data(
-        n_subjects=50, n_observations_per_subject=6
+        n_subjects=20, n_observations_per_subject=4
     )
     
     print(f"✓ Generated data for {len(population_data['subject_id'].unique())} subjects")
@@ -865,9 +865,9 @@ def compare_population_methods():
     # Draw tensor network structure
     tensor_model.draw_tensor_network()
     
-    # Optimize tensor network
+    # Optimize tensor network (reduced iterations for testing)
     optimized_params, optimization_costs = tensor_model.optimize_tensor_network(
-        population_data, max_iterations=30, learning_rate=0.05
+        population_data, max_iterations=5, learning_rate=0.05
     )
     
     # Extract population parameters

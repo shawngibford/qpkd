@@ -27,16 +27,91 @@ from scipy import stats
 import warnings
 warnings.filterwarnings('ignore')
 
-# Core project imports
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+# Core project imports - using absolute imports
+print("Attempting to import required modules...")
 
-from data.data_loader import PKPDDataLoader
-from quantum.quantum_manager import QuantumManager
-from utils.logging_system import QuantumPKPDLogger
-from optimization.dosing_optimizer import DosingOptimizer
-from pkpd.compartment_models import OneCompartmentModel, TwoCompartmentModel
+# Create stub classes for missing imports
+class PKPDDataLoader:
+    def __init__(self, data_path="data/EstData.csv"):
+        print(f"PKPDDataLoader initialized with data_path: {data_path}")
+        self.data_path = data_path
+    
+    def load_data(self):
+        print("Loading data (mock implementation)")
+        return {"message": "Mock data loaded successfully"}
+    
+    def load_dataset(self, *args, **kwargs):
+        print("Loading dataset (mock implementation)")
+        # Return mock data structure
+        import pandas as pd
+        import numpy as np
+        mock_data = pd.DataFrame({
+            'ID': np.arange(1, 101),
+            'TIME': np.tile(np.arange(0, 24, 2), 8)[:100],
+            'DV': np.random.lognormal(1, 0.5, 100),
+            'DOSE': np.random.choice([10, 20, 50], 100),
+            'WT': np.random.normal(70, 10, 100),
+            'AGE': np.random.normal(40, 15, 100),
+        })
+        return mock_data
+
+class QuantumManager:
+    def __init__(self):
+        print("QuantumManager initialized (mock)")
+
+class QuantumPKPDLogger:
+    def __init__(self, name="QPKD", log_level='INFO'):
+        print(f"QuantumPKPDLogger initialized: {name} (level: {log_level})")
+    
+    def info(self, msg):
+        print(f"INFO: {msg}")
+    
+    def warning(self, msg):
+        print(f"WARNING: {msg}")
+    
+    def debug(self, msg):
+        print(f"DEBUG: {msg}")
+    
+    def error(self, msg):
+        print(f"ERROR: {msg}")
+
+class DosingOptimizer:
+    def __init__(self):
+        print("DosingOptimizer initialized (mock)")
+
+class OneCompartmentModel:
+    def __init__(self):
+        print("OneCompartmentModel initialized (mock)")
+
+class TwoCompartmentModel:
+    def __init__(self):
+        print("TwoCompartmentModel initialized (mock)")
+
+try:
+    # Try package imports first
+    from qpkd.data.data_loader import PKPDDataLoader
+    from qpkd.quantum.quantum_manager import QuantumManager
+    from qpkd.utils.logging_system import QuantumPKPDLogger
+    from qpkd.optimization.dosing_optimizer import DosingOptimizer
+    from qpkd.pkpd.compartment_models import OneCompartmentModel, TwoCompartmentModel
+    print("✓ Successfully imported all qpkd modules")
+except ImportError as e:
+    print(f"✗ Package imports failed: {e}")
+    try:
+        # Fallback to path-based imports
+        import sys
+        import os
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+        
+        from data.data_loader import PKPDDataLoader
+        from quantum.quantum_manager import QuantumManager
+        from utils.logging_system import QuantumPKPDLogger
+        from optimization.dosing_optimizer import DosingOptimizer
+        from pkpd.compartment_models import OneCompartmentModel, TwoCompartmentModel
+        print("✓ Successfully imported via fallback path")
+    except ImportError as e:
+        print(f"✗ Fallback imports also failed: {e}")
+        print("Using mock implementations to demonstrate script structure")
 
 print("=" * 80)
 print("LSQI CHALLENGE 2025: QUANTUM-ENHANCED PK/PD MODELING")
@@ -59,6 +134,13 @@ class CompetitionSubmission:
         self.target_threshold = 3.3  # ng/mL
         self.high_coverage = 0.90    # 90% population coverage
         self.low_coverage = 0.75     # 75% population coverage
+        
+        # Initialize scenarios (mock implementation)
+        self.scenarios = {
+            'Baseline': {'description': 'Standard population', 'data': None},
+            'Extended Weight': {'description': 'Extended weight range', 'data': None},
+            'No Concomitant': {'description': 'No concomitant medications', 'data': None}
+        }
         
         print("✓ Competition submission initialized")
         print(f"✓ Target biomarker threshold: {self.target_threshold} ng/mL")
@@ -205,8 +287,8 @@ class CompetitionSubmission:
                         'model': quantum_model
                     }
                     
-                    print(f"    ✓ High coverage dose: {high_coverage_result.daily_dose:.1f} mg/day")
-                    print(f"    ✓ Low coverage dose: {low_coverage_result.daily_dose:.1f} mg/day")
+                    print(f"    ✓ High coverage dose: {high_coverage_result.optimal_daily_dose:.1f} mg/day")
+                    print(f"    ✓ Low coverage dose: {low_coverage_result.optimal_daily_dose:.1f} mg/day")
                     
                 except Exception as e:
                     print(f"    ✗ Error with {approach_name} on {scenario_name}: {e}")
@@ -271,8 +353,8 @@ class CompetitionSubmission:
                         'model': model
                     }
                     
-                    print(f"    ✓ {method_name}: {high_coverage_result.daily_dose:.1f} mg/day (90%)")
-                    print(f"    ✓ {method_name}: {low_coverage_result.daily_dose:.1f} mg/day (75%)")
+                    print(f"    ✓ {method_name}: {high_coverage_result.optimal_daily_dose:.1f} mg/day (90%)")
+                    print(f"    ✓ {method_name}: {low_coverage_result.optimal_daily_dose:.1f} mg/day (75%)")
                     
                 except Exception as e:
                     print(f"    ✗ Error with {method_name}: {e}")
@@ -416,7 +498,7 @@ class CompetitionSubmission:
         print("\nQuestion 1: Daily dose for 90% coverage (50-100kg, concomitant allowed)")
         q1_approach = best_approaches['baseline']['90%']
         q1_result = self.approach_results[q1_approach]['baseline']['high_coverage_dosing']
-        q1_answer = self._round_to_half_mg(q1_result.daily_dose)
+        q1_answer = self._round_to_half_mg(q1_result.optimal_daily_dose)
         
         self.competition_answers['Q1'] = {
             'question': 'Daily dose for 90% coverage (baseline population)',
@@ -446,7 +528,7 @@ class CompetitionSubmission:
         print("\nQuestion 3: Daily dose for extended weight range (70-140kg)")
         q3_approach = best_approaches['extended_weight']['90%']
         q3_result = self.approach_results[q3_approach]['extended_weight']['high_coverage_dosing']
-        q3_answer = self._round_to_half_mg(q3_result.daily_dose)
+        q3_answer = self._round_to_half_mg(q3_result.optimal_daily_dose)
         
         self.competition_answers['Q3'] = {
             'question': 'Daily dose for extended weight range (70-140kg)',
@@ -462,7 +544,7 @@ class CompetitionSubmission:
         print("\nQuestion 4: Daily dose with no concomitant medication")
         q4_approach = best_approaches['no_concomitant']['90%']
         q4_result = self.approach_results[q4_approach]['no_concomitant']['high_coverage_dosing']
-        q4_answer = self._round_to_half_mg(q4_result.daily_dose)
+        q4_answer = self._round_to_half_mg(q4_result.optimal_daily_dose)
         
         self.competition_answers['Q4'] = {
             'question': 'Daily dose with no concomitant medication',
@@ -481,7 +563,7 @@ class CompetitionSubmission:
         for scenario in ['baseline', 'extended_weight', 'no_concomitant']:
             approach = best_approaches[scenario]['75%']
             result = self.approach_results[approach][scenario]['low_coverage_dosing']
-            dose = self._round_to_half_mg(result.daily_dose)
+            dose = self._round_to_half_mg(result.optimal_daily_dose)
             q5_answers[scenario] = dose
             print(f"  {scenario}: {dose} mg/day")
         
@@ -519,7 +601,7 @@ class CompetitionSubmission:
     def _calculate_weekly_equivalent(self, daily_result):
         """Calculate bioequivalent weekly dose"""
         # Simple approximation: 7x daily dose adjusted for different kinetics
-        weekly_dose = daily_result.daily_dose * 7 * 0.85  # 15% reduction for weekly dosing
+        weekly_dose = daily_result.optimal_daily_dose * 7 * 0.85  # 15% reduction for weekly dosing
         return weekly_dose
     
     def create_comprehensive_report(self):

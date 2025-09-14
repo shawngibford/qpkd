@@ -50,7 +50,7 @@ except ImportError:
 import sys
 sys.path.append('/Users/shawngibford/dev/qpkd/src')
 
-from quantum.approach2_qml.quantum_neural_network_full import QuantumNeuralNetworkFull
+from quantum.approach2_qml.quantum_neural_network_full import QuantumNeuralNetworkFull, QNNConfig, QNNHyperparameters
 from data.data_loader import PKPDDataLoader
 from data.preprocessor import DataPreprocessor
 from utils.logging_system import QuantumPKPDLogger
@@ -177,18 +177,36 @@ demo_params_alt = np.random.random(n_qubits * 2 * 4)
 
 print("\n1.1 LAYERED QML ARCHITECTURE:")
 print("Features are re-uploaded at each layer for enhanced expressivity")
-layered_drawer = qml.draw(layered_qml_circuit, expansion_strategy="device")
-print(layered_drawer(demo_features, demo_params_layered))
+try:
+    qml.drawer.use_style('pennylane')
+    fig, ax = qml.draw_mpl(layered_qml_circuit)(demo_features, demo_params_layered)
+    plt.title("Layered QML Circuit")
+    plt.tight_layout()
+    plt.show()
+except Exception as e:
+    print(f"Circuit visualization failed: {e}")
 
 print("\n1.2 TREE QML ARCHITECTURE:")  
 print("Hierarchical processing mimics decision tree structure")
-tree_drawer = qml.draw(tree_qml_circuit, expansion_strategy="device")
-print(tree_drawer(demo_features, demo_params_tree))
+try:
+    qml.drawer.use_style('pennylane')
+    fig, ax = qml.draw_mpl(tree_qml_circuit)(demo_features, demo_params_tree)
+    plt.title("Tree QML Circuit")
+    plt.tight_layout()
+    plt.show()
+except Exception as e:
+    print(f"Circuit visualization failed: {e}")
 
 print("\n1.3 ALTERNATING QML ARCHITECTURE:")
 print("Alternates between feature encoding and quantum processing")
-alt_drawer = qml.draw(alternating_qml_circuit, expansion_strategy="device")
-print(alt_drawer(demo_features, demo_params_alt))
+try:
+    qml.drawer.use_style('pennylane')
+    fig, ax = qml.draw_mpl(alternating_qml_circuit)(demo_features, demo_params_alt)
+    plt.title("Alternating QML Circuit")
+    plt.tight_layout()
+    plt.show()
+except Exception as e:
+    print(f"Circuit visualization failed: {e}")
 
 # ============================================================================
 # SECTION 2: DATA PREPARATION FOR QML
@@ -198,7 +216,7 @@ print("\n\n2. DATA PREPARATION FOR QUANTUM MACHINE LEARNING")
 print("-"*50)
 
 # Load and preprocess data
-loader = PKPDDataLoader("data/EstData.csv")
+loader = PKPDDataLoader("../data/EstData.csv")
 raw_data = loader.prepare_pkpd_data(weight_range=(50, 100), concomitant_allowed=True)
 
 # Initialize preprocessor
@@ -234,9 +252,12 @@ biomarker_classes = create_biomarker_classes(biomarker_flat)
 
 print(f"Biomarker classification distribution:")
 unique, counts = np.unique(biomarker_classes, return_counts=True)
+cls_names = ['Low (<3.3)', 'Medium (3.3-6.6)', 'High (6.6-10)', 'Very High (>10)']
 for cls, count in zip(unique, counts):
-    cls_names = ['Low (<3.3)', 'Medium (3.3-6.6)', 'High (6.6-10)', 'Very High (>10)']
     print(f"  {cls_names[cls]}: {count} samples ({count/len(biomarker_classes)*100:.1f}%)")
+
+# Create aligned arrays for plotting
+cls_names_plot = [cls_names[cls] for cls in unique]
 
 # Visualize data preparation
 fig, axes = plt.subplots(2, 3, figsize=(18, 10))
@@ -273,7 +294,7 @@ axes[1,0].set_ylabel('Feature Value')
 axes[1,0].legend()
 
 # Biomarker class distribution
-axes[1,1].bar(cls_names, counts, alpha=0.7, color='purple')
+axes[1,1].bar(cls_names_plot, counts, alpha=0.7, color='purple')
 axes[1,1].set_title('Biomarker Classification Targets')
 axes[1,1].set_xlabel('Biomarker Level')
 axes[1,1].set_ylabel('Count')
@@ -303,28 +324,40 @@ print("-"*50)
 # Initialize different QML architectures
 qml_models = {
     'Layered': QuantumNeuralNetworkFull(
-        n_qubits=6, 
-        n_layers=4,
-        architecture='layered',
-        learning_rate=0.01,
-        max_iterations=80,
-        data_reuploading=True
+        QNNConfig(
+            n_qubits=6, 
+            n_layers=4,
+            max_iterations=5,
+            hyperparams=QNNHyperparameters(
+                architecture='layered',
+                learning_rate=0.01,
+                data_reuploading_layers=3
+            )
+        )
     ),
     'Tree': QuantumNeuralNetworkFull(
-        n_qubits=6,
-        n_layers=3, 
-        architecture='tree',
-        learning_rate=0.015,
-        max_iterations=80,
-        data_reuploading=False
+        QNNConfig(
+            n_qubits=6,
+            n_layers=3, 
+            max_iterations=5,
+            hyperparams=QNNHyperparameters(
+                architecture='tree',
+                learning_rate=0.015,
+                data_reuploading_layers=0
+            )
+        )
     ),
     'Alternating': QuantumNeuralNetworkFull(
-        n_qubits=8,
-        n_layers=3,
-        architecture='alternating', 
-        learning_rate=0.02,
-        max_iterations=80,
-        data_reuploading=True
+        QNNConfig(
+            n_qubits=8,
+            n_layers=3,
+            max_iterations=5,
+            hyperparams=QNNHyperparameters(
+                architecture='alternating',
+                learning_rate=0.02,
+                data_reuploading_layers=3
+            )
+        )
     )
 }
 
@@ -336,9 +369,9 @@ model_performances = {}
 
 for name, model in qml_models.items():
     print(f"\nTraining {name} QML model...")
-    print(f"  Architecture: {model.architecture}")
-    print(f"  Qubits: {model.n_qubits}, Layers: {model.n_layers}")
-    print(f"  Data Reuploading: {model.data_reuploading}")
+    print(f"  Architecture: {model.qnn_config.hyperparams.architecture}")
+    print(f"  Qubits: {model.config.n_qubits}, Layers: {model.config.n_layers}")
+    print(f"  Data Reuploading Layers: {model.qnn_config.hyperparams.data_reuploading_layers}")
     
     # Train model
     history = model.fit(augmented_data)
@@ -361,9 +394,21 @@ for name, model in qml_models.items():
     test_predictions = np.array(test_predictions)
     test_targets = np.array(test_targets)
     
+    # Handle NaN values in predictions
+    valid_mask = ~np.isnan(test_predictions) & ~np.isnan(test_targets)
+    if np.sum(valid_mask) == 0:
+        print(f"Warning: No valid predictions for {name}")
+        continue
+    
+    # Use only valid predictions for metrics
+    valid_predictions = test_predictions[valid_mask]
+    valid_targets = test_targets[valid_mask]
+    
+    print(f"Valid predictions for {name}: {np.sum(valid_mask)}/{len(test_predictions)}")
+    
     # Calculate metrics
-    r2 = r2_score(test_targets, test_predictions)
-    rmse = np.sqrt(mean_squared_error(test_targets, test_predictions))
+    r2 = r2_score(valid_targets, valid_predictions)
+    rmse = np.sqrt(mean_squared_error(valid_targets, valid_predictions))
     
     model_performances[name] = {
         'r2': r2,
@@ -610,7 +655,7 @@ classification_model = QuantumNeuralNetworkFull(
     n_layers=4,
     architecture='alternating',
     learning_rate=0.02,
-    max_iterations=60,
+    max_iterations=5,
     task_type='classification'
 )
 
@@ -757,7 +802,7 @@ for scenario_name, config in scenarios.items():
     # Quick retraining for scenario (in practice, might use transfer learning)
     scenario_model = QuantumNeuralNetworkFull(
         n_qubits=6, n_layers=3, architecture='layered',
-        learning_rate=0.02, max_iterations=40
+        learning_rate=0.02, max_iterations=5
     )
     scenario_model.fit(scenario_processed)
     
@@ -775,7 +820,7 @@ for scenario_name, config in scenarios.items():
     
     qml_dosing_results[scenario_name] = result
     
-    print(f"  Optimal daily dose: {result.daily_dose:.2f} mg")
+    print(f"  Optimal daily dose: {result.optimal_daily_dose:.2f} mg")
     print(f"  Coverage achieved: {result.coverage_achieved:.1%}")
 
 # Visualize QML dosing results
@@ -785,7 +830,7 @@ fig.suptitle('QML Ensemble Dosing Optimization Results', fontsize=16, fontweight
 scenario_names = list(qml_dosing_results.keys())
 short_names = ['Q1: Daily', 'Q2: Weekly', 'Q3: Ext. Wt.', 'Q4: No Conmed', 'Q5: 75% Cov']
 
-daily_doses = [qml_dosing_results[name].daily_dose for name in scenario_names]
+daily_doses = [qml_dosing_results[name].optimal_daily_dose for name in scenario_names]
 coverages = [qml_dosing_results[name].coverage_achieved for name in scenario_names]
 
 # Daily doses
@@ -1008,9 +1053,9 @@ print(f"\nCHALLENGE QUESTION ANSWERS (QML):")
 print("-" * 40)
 for scenario, result in qml_dosing_results.items():
     if 'weekly' not in scenario.lower():
-        print(f"• {scenario}: {result.daily_dose:.1f} mg/day")
+        print(f"• {scenario}: {result.optimal_daily_dose:.1f} mg/day")
     else:
-        print(f"• {scenario}: {result.weekly_dose:.1f} mg/week")
+        print(f"• {scenario}: {result.optimal_weekly_dose:.1f} mg/week")
 
 print(f"\nQUANTUM ADVANTAGES DEMONSTRATED:")
 print("-" * 40)

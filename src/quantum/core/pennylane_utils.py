@@ -24,7 +24,7 @@ class PennyLaneDevice:
         self.config = config
         self.device = self._create_device()
         
-    def _create_device(self) -> qml.Device:
+    def _create_device(self) -> qml.device:
         """Create PennyLane device based on configuration"""
         return qml.device(
             self.config.name,
@@ -33,7 +33,7 @@ class PennyLaneDevice:
             analytic=self.config.analytic
         )
     
-    def get_device(self) -> qml.Device:
+    def get_device(self) -> qml.device:
         """Get the PennyLane device"""
         return self.device
 

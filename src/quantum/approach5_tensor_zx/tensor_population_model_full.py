@@ -16,7 +16,7 @@ from sklearn.preprocessing import StandardScaler
 
 from ..core.base import QuantumPKPDBase, ModelConfig, PKPDData, OptimizationResult
 from ..core.zx_utils import ZXTensorNetwork, ZXConfig
-from ...utils.logging_system import QuantumPKPDLogger, DosingResults
+from utils.logging_system import QuantumPKPDLogger, DosingResults
 
 
 @dataclass
@@ -818,3 +818,14 @@ class TensorPopulationModelFull(QuantumPKPDBase):
             'bootstrap_uncertainty': 1.0 if self.parameter_uncertainties else 0.0,
             'tensor_fidelity': self._calculate_mps_fidelity()
         }
+    
+    def cost_function(self, params: np.ndarray, data: PKPDData) -> float:
+        """
+        Simple cost function wrapper for abstract method compliance.
+        Delegates to the tensor population cost function.
+        """
+        try:
+            return self.tensor_population_cost_function(params, data)
+        except Exception as e:
+            self.logger.log_error("Tensor", e, {"context": "cost_function_wrapper"})
+            return np.inf

@@ -43,7 +43,7 @@ class VQCParameterEstimator(QuantumPKPDBase):
         self.parameter_history = []
         self.cost_history = []
         
-    def setup_quantum_device(self) -> qml.Device:
+    def setup_quantum_device(self) -> qml.device:
         """Setup PennyLane quantum device for VQC"""
         device = qml.device(
             "default.qubit",

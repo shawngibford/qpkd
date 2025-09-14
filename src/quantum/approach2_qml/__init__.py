@@ -12,11 +12,11 @@ Key Features:
 """
 
 from .quantum_neural_network import QuantumNeuralNetwork
-from .population_pk_model import PopulationPKModel
-from .qnn_ensemble import QNNEnsemble
+# from .population_pk_model import PopulationPKModel  # Missing file
+# from .qnn_ensemble import QNNEnsemble  # Missing file
 
 __all__ = [
     'QuantumNeuralNetwork',
-    'PopulationPKModel', 
-    'QNNEnsemble'
+    # 'PopulationPKModel', 
+    # 'QNNEnsemble'
 ]
