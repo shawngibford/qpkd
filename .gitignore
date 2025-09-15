@@ -26,6 +26,8 @@ venv/
 env/
 ENV/
 .venv/
+/Users/shawngibford/dev/qpkd/qpkd
+/Users/shawngibford/dev/qpkd/qpkd_env
 
 # IDE
 .vscode/
