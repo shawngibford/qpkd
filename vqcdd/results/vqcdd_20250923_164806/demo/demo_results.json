@@ -1,0 +1,15 @@
+{
+  "training_completed": true,
+  "final_cost": 50.00595525907078,
+  "training_iterations": 5,
+  "validation_predictions": 1,
+  "circuit_info": {
+    "n_qubits": 4,
+    "n_layers": 2,
+    "ansatz": "ry_cnot",
+    "encoding": "angle",
+    "param_shape": [
+      2,
+      4
+    ],
+    "total_params": 

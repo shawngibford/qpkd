@@ -1,0 +1,163 @@
+{
+  "scenarios_optimized": 4,
+  "successful_optimizations": 4,
+  "dosing_results": {
+    "Q1_standard_population": {
+      "scenario": {
+        "name": "Q1_standard_population",
+        "description": "Daily dosing for standard population (50-100 kg)",
+        "weight_range": [
+          50,
+          100
+        ],
+        "target_biomarker": 3.3,
+        "population_coverage": 0.9,
+        "concomitant_allowed": true
+      },
+      "optimal_dose": 10.0,
+      "achieved_coverage": 1.0,
+      "optimization_success": true,
+      "safety_margin": 1.0,
+      "dose_range": [
+        10.0,
+        20.0,
+        30.0,
+        40.0,
+        50.0,
+        60.0,
+        70.0,
+        80.0,
+        90.0,
+        100.0,
+        110.0,
+        120.0,
+        130.0,
+        140.0,
+        150.0,
+        160.0,
+        170.0,
+        180.0,
+        190.0,
+        200.0
+      ]
+    },
+    "Q3_extended_population": {
+      "scenario": {
+        "name": "Q3_extended_population",
+        "description": "Daily dosing for extended weight range (70-140 kg)",
+        "weight_range": [
+          70,
+          140
+        ],
+        "target_biomarker": 3.3,
+        "population_coverage": 0.9,
+        "concomitant_allowed": true
+      },
+      "optimal_dose": 10.0,
+      "achieved_coverage": 1.0,
+      "optimization_success": true,
+      "safety_margin": 1.0,
+      "dose_range": [
+        10.0,
+        20.0,
+        30.0,
+        40.0,
+        50.0,
+        60.0,
+        70.0,
+        80.0,
+        90.0,
+        100.0,
+        110.0,
+        120.0,
+        130.0,
+        140.0,
+        150.0,
+        160.0,
+        170.0,
+        180.0,
+        190.0,
+        200.0
+      ]
+    },
+    "Q4_no_concomitant": {
+      "scenario": {
+        "name": "Q4_no_concomitant",
+        "description": "Daily dosing without concomitant medication",
+        "weight_range": [
+          50,
+          100
+        ],
+        "target_biomarker": 3.3,
+        "population_coverage": 0.9,
+        "concomitant_allowed": false
+      },
+      "optimal_dose": 10.0,
+      "achieved_coverage": 1.0,
+      "optimization_success": true,
+      "safety_margin": 1.0,
+      "dose_range": [
+        10.0,
+        20.0,
+        30.0,
+        40.0,
+        50.0,
+        60.0,
+        70.0,
+        80.0,
+        90.0,
+        100.0,
+        110.0,
+        120.0,
+        130.0,
+        140.0,
+        150.0,
+        160.0,
+        170.0,
+        180.0,
+        190.0,
+        200.0
+      ]
+    },
+    "Q5_alternative_coverage": {
+      "scenario": {
+        "name": "Q5_alternative_coverage",
+        "description": "Daily dosing targeting 75% population coverage",
+        "weight_range": [
+          50,
+          100
+        ],
+        "target_biomarker": 3.3,
+        "population_coverage": 0.75,
+        "concomitant_allowed": true
+      },
+      "optimal_dose": 10.0,
+      "achieved_coverage": 1.0,
+      "optimization_success": true,
+      "safety_margin": 1.0,
+      "dose_range": [
+        10.0,
+        20.0,
+        30.0,
+        40.0,
+        50.0,
+        60.0,
+        70.0,
+        80.0,
+        90.0,
+        100.0,
+        110.0,
+        120.0,
+        130.0,
+        140.0,
+        150.0,
+        160.0,
+        170.0,
+        180.0,
+        190.0,
+        200.0
+      ]
+    }
+  },
+  "optimization_time": 115.01398921012878
+}

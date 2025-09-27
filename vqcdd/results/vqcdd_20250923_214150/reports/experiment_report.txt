@@ -1,0 +1,55 @@
+VQCdd Experimental Results Report
+==================================================
+Experiment ID: vqcdd_20250923_214150
+Timestamp: 2025-09-23 21:46:11
+Total Runtime: 521.99 seconds
+
+Configuration:
+  Mode: all
+  Data Source: synthetic
+  Patients: 100
+  Quantum Circuit: 4 qubits, 2 layers
+  Ansatz: ry_cnot
+  Encoding: angle
+
+Results Summary:
+  data_loading: ✗ FAILED (0.01s)
+  demo: ✓ SUCCESS (33.59s)
+  validation: ✗ FAILED (70.40s)
+  noise_analysis: ✗ FAILED (52.28s)
+  hyperparameter_optimization: ✗ FAILED (0.00s)
+  scientific_analysis: ✓ SUCCESS (0.01s)
+  dosing_optimization: ✓ SUCCESS (104.71s)
+  total_experiment: ✗ FAILED (261.00s)
+
+Errors Encountered:
+  • Validation experiment error: 'QuantumFeatureEncoder' object has no attribute 'encode_patient'
+  • Noise analysis error: 'VQCTrainer' object has no attribute 'predict_patient_parameters'
+  • HPO error: scikit-optimize required for Bayesian optimization
+
+DEMO RESULTS:
+------------------------------
+  training_completed: True
+  final_cost: 50.00453405558597
+  training_iterations: 10
+  validation_predictions: 10
+  circuit_info: {'n_qubits': 4, 'n_layers': 2, 'ansatz': 'ry_cnot', 'encoding': 'angle', 'param_shape': (2, 4), 'total_params': 8, 'device': '<default.qubit device (wires=4) at 0x13a613d50>', 'diff_method': 'adjoint', 'encoding_optimization': False, 'feature_importance_analysis': False, 'encoding_comparison': False, 'expressivity_benchmarking': False, 'performance_analysis': False}
+  training_time: 33.58610486984253
+
+SCIENTIFIC_ANALYSIS RESULTS:
+------------------------------
+  experiments_analyzed: 3
+  quantum_advantage: {'detected': False, 'metrics': {}, 'statistical_significance': {}, 'recommendations': []}
+  scientific_insights: {'summary_statistics': {'experiment_count': 3, 'approaches': {'quantum_vqc': 3}, 'performance_metrics': {'convergence_iterations': {'count': 3, 'mean': 27.0, 'std': 2.160246899469287, 'median': 28.0, 'min': 24, 'max': 29, 'q25': 26.0, 'q75': 28.5}, 'training_time': {'count': 3, 'mean': 30.928998355974503, 'std': 6.377465964314334, 'median': 32.712800217929825, 'min': 22.380620011920698, 'max': 37.69357483807299, 'q25': 27.54671011492526, 'q75': 35.20318752800141}, 'accuracy': {'count': 3, 'mean': 0.7801558135893732, 'std': 0.04014858677713055, 'median': 0.7908222540475663, 'min': 0.7265262807032524, 'max': 0.8231189060173009, 'q25': 0.7586742673754094, 'q75': 0.8069705800324336}}, 'configuration_analysis': {}}, 'correlation_analysis': {'parameter_correlations': {}}, 'hypothesis_tests': {}, 'pattern_detection': {'temporal_trends': {}, 'configuration_clusters': {}, 'performance_outliers': {}, 'convergence_patterns': {}}, 'recommendations': [], 'future_directions': ['Investigate quantum advantage at larger problem scales', 'Implement noise-aware circuit design for NISQ devices', 'Explore hybrid quantum-classical optimization strategies', 'Develop problem-specific quantum feature encodings', 'Study quantum expressivity bounds for PK/PD modeling', 'Expand quantum VQC experimental dataset for robust statistical analysis']}
+  analysis_time: 0.005403041839599609
+
+DOSING_OPTIMIZATION RESULTS:
+------------------------------
+  scenarios_optimized: 4
+  successful_optimizations: 4
+  dosing_results: {'Q1_standard_population': {'scenario': {'name': 'Q1_standard_population', 'description': 'Daily dosing for standard population (50-100 kg)', 'weight_range': (50, 100), 'target_biomarker': 3.3, 'population_coverage': 0.9, 'concomitant_allowed': True}, 'optimal_dose': 10.0, 'achieved_coverage': 1.0, 'optimization_success': True, 'safety_margin': 1.0, 'dose_range': [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0, 110.0, 120.0, 130.0, 140.0, 150.0, 160.0, 170.0, 180.0, 190.0, 200.0]}, 'Q3_extended_population': {'scenario': {'name': 'Q3_extended_population', 'description': 'Daily dosing for extended weight range (70-140 kg)', 'weight_range': (70, 140), 'target_biomarker': 3.3, 'population_coverage': 0.9, 'concomitant_allowed': True}, 'optimal_dose': 10.0, 'achieved_coverage': 1.0, 'optimization_success': True, 'safety_margin': 1.0, 'dose_range': [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0, 110.0, 120.0, 130.0, 140.0, 150.0, 160.0, 170.0, 180.0, 190.0, 200.0]}, 'Q4_no_concomitant': {'scenario': {'name': 'Q4_no_concomitant', 'description': 'Daily dosing without concomitant medication', 'weight_range': (50, 100), 'target_biomarker': 3.3, 'population_coverage': 0.9, 'concomitant_allowed': False}, 'optimal_dose': 10.0, 'achieved_coverage': 1.0, 'optimization_success': True, 'safety_margin': 1.0, 'dose_range': [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0, 110.0, 120.0, 130.0, 140.0, 150.0, 160.0, 170.0, 180.0, 190.0, 200.0]}, 'Q5_alternative_coverage': {'scenario': {'name': 'Q5_alternative_coverage', 'description': 'Daily dosing targeting 75% population coverage', 'weight_range': (50, 100), 'target_biomarker': 3.3, 'population_coverage': 0.75, 'concomitant_allowed': True}, 'optimal_dose': 10.0, 'achieved_coverage': 1.0, 'optimization_success': True, 'safety_margin': 1.0, 'dose_range': [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0, 110.0, 120.0, 130.0, 140.0, 150.0, 160.0, 170.0, 180.0, 190.0, 200.0]}}
+  optimization_time: 104.71139216423035
+
+==================================================
+Report generation complete.
+Full results saved to: results/vqcdd_20250923_214150

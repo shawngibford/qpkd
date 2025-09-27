@@ -10,7 +10,8 @@ from scipy.optimize import minimize
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
-from quantum.core.base import PKPDData, DosingResults
+from quantum.core.base import PKPDData
+from utils.logging_system import DosingResults
 
 
 @dataclass

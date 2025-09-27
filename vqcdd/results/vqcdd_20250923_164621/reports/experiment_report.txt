@@ -1,0 +1,25 @@
+VQCdd Experimental Results Report
+==================================================
+Experiment ID: vqcdd_20250923_164621
+Timestamp: 2025-09-23 16:46:27
+Total Runtime: 12.01 seconds
+
+Configuration:
+  Mode: demo
+  Data Source: synthetic
+  Patients: 10
+  Quantum Circuit: 4 qubits, 2 layers
+  Ansatz: ry_cnot
+  Encoding: angle
+
+Results Summary:
+  data_loading: ✗ FAILED (0.00s)
+  demo: ✗ FAILED (6.00s)
+  total_experiment: ✗ FAILED (6.00s)
+
+Errors Encountered:
+  • Demo experiment error: 'VQCTrainer' object has no attribute 'optimization_history'
+
+==================================================
+Report generation complete.
+Full results saved to: results/vqcdd_20250923_164621

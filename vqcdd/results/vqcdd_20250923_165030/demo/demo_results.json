@@ -1,0 +1,25 @@
+{
+  "training_completed": true,
+  "final_cost": 50.00595525907078,
+  "training_iterations": 5,
+  "validation_predictions": 1,
+  "circuit_info": {
+    "n_qubits": 4,
+    "n_layers": 2,
+    "ansatz": "ry_cnot",
+    "encoding": "angle",
+    "param_shape": [
+      2,
+      4
+    ],
+    "total_params": 8,
+    "device": "<default.qubit device (wires=4) at 0x140f26f50>",
+    "diff_method": "adjoint",
+    "encoding_optimization": false,
+    "feature_importance_analysis": false,
+    "encoding_comparison": false,
+    "expressivity_benchmarking": false,
+    "performance_analysis": false
+  },
+  "training_time": 6.301048040390015
+}

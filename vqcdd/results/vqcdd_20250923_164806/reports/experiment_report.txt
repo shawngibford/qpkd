@@ -1,0 +1,25 @@
+VQCdd Experimental Results Report
+==================================================
+Experiment ID: vqcdd_20250923_164806
+Timestamp: 2025-09-23 16:48:12
+Total Runtime: 12.30 seconds
+
+Configuration:
+  Mode: demo
+  Data Source: synthetic
+  Patients: 10
+  Quantum Circuit: 4 qubits, 2 layers
+  Ansatz: ry_cnot
+  Encoding: angle
+
+Results Summary:
+  data_loading: ✗ FAILED (0.00s)
+  demo: ✗ FAILED (6.15s)
+  total_experiment: ✗ FAILED (6.15s)
+
+Errors Encountered:
+  • Demo experiment error: Object of type int64 is not JSON serializable
+
+==================================================
+Report generation complete.
+Full results saved to: results/vqcdd_20250923_164806

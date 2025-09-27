@@ -68,7 +68,7 @@ print("\n1. QUANTUM CIRCUIT ARCHITECTURE")
 print("-"*50)
 
 # Create VQC device for circuit drawing
-n_qubits = 6
+n_qubits = 4  # Reduced to mitigate barren plateaus
 dev = qml.device('default.qubit', wires=n_qubits)
 
 @qml.qnode(dev)
@@ -228,13 +228,13 @@ print("\n\n3. VQC MODEL TRAINING")
 print("-"*50)
 
 # Initialize VQC model with optimized hyperparameters
-vqc_config = VQCConfig(
-    n_qubits=6,
-    n_layers=4,
-    learning_rate=0.01,
-    max_iterations=3,  # Reduced for testing
-    shots=1024
-)
+# Use barren plateau mitigation configuration
+vqc_config = VQCConfig()
+# Base config will use our improved defaults:
+# - n_qubits=4, n_layers=2 from ModelConfig
+# - amplitude_encoding, qng optimizer from VQCHyperparameters
+vqc_config.max_iterations = 10  # Slightly more iterations for testing
+vqc_config.shots = 1024
 
 vqc_model = VQCParameterEstimatorFull(vqc_config)
 
@@ -616,9 +616,9 @@ for scenario_name, config in scenarios.items():
             concomitant_allowed=config['concomitant_allowed']
         )
         # Retrain model for this scenario
-        vqc_scenario_config = VQCConfig(
-            n_qubits=6, n_layers=4, learning_rate=0.01, max_iterations=5  # Reduced for testing
-        )
+        # Use same barren plateau mitigation config
+        vqc_scenario_config = VQCConfig()
+        vqc_scenario_config.max_iterations = 5  # Reduced for testing
         vqc_scenario_model = VQCParameterEstimatorFull(vqc_scenario_config)
         vqc_scenario_model.fit(scenario_data)
     else:

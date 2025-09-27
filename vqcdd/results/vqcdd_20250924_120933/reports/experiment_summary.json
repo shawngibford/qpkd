@@ -1,0 +1,306 @@
+{
+  "experiment_id": "vqcdd_20250924_120933",
+  "timestamp": "2025-09-24T13:31:52.929413",
+  "configuration": {
+    "mode": "all",
+    "data_source": "synthetic",
+    "output_dir": "results",
+    "verbose": false,
+    "debug": true,
+    "parallel": false,
+    "seed": 42,
+    "n_patients": 100,
+    "test_fraction": 0.2,
+    "validation_fraction": 0.2,
+    "n_qubits": 4,
+    "n_layers": 2,
+    "ansatz": "ry_cnot",
+    "encoding": "angle",
+    "max_iterations": 50,
+    "learning_rate": 0.01,
+    "optimizer_type": "adam",
+    "noise_level": "low",
+    "hpo_n_calls": 20,
+    "hpo_method": "bayesian",
+    "compare_classical": false,
+    "generate_report": false,
+    "save_models": false,
+    "comprehensive": true
+  },
+  "results": {
+    "demo": {
+      "training_completed": true,
+      "final_cost": 50.00453405558597,
+      "training_iterations": 10,
+      "validation_predictions": 10,
+      "circuit_info": {
+        "n_qubits": 4,
+        "n_layers": 2,
+        "ansatz": "ry_cnot",
+        "encoding": "angle",
+        "param_shape": [
+          2,
+          4
+        ],
+        "total_params": 8,
+        "device": "<default.qubit device (wires=4) at 0x16d85a710>",
+        "diff_method": "adjoint",
+        "encoding_optimization": false,
+        "feature_importance_analysis": false,
+        "encoding_comparison": false,
+        "expressivity_benchmarking": false,
+        "performance_analysis": false
+      },
+      "training_time": 35.46666407585144
+    },
+    "scientific_analysis": {
+      "experiments_analyzed": 3,
+      "quantum_advantage": {
+        "detected": false,
+        "metrics": {},
+        "statistical_significance": {},
+        "recommendations": []
+      },
+      "scientific_insights": {
+        "summary_statistics": {
+          "experiment_count": 3,
+          "approaches": {
+            "quantum_vqc": 3
+          },
+          "performance_metrics": {
+            "accuracy": {
+              "count": 3,
+              "mean": 0.7767674036602896,
+              "std": 0.021345752223090663,
+              "median": 0.7687849009172836,
+              "min": 0.7555461294854933,
+              "max": 0.8059711805780919,
+              "q25": 0.7621655152013884,
+              "q75": 0.7873780407476878
+            },
+            "convergence_iterations": {
+              "count": 3,
+              "mean": 27.0,
+              "std": 1.4142135623730951,
+              "median": 26.0,
+              "min": 26,
+              "max": 29,
+              "q25": 26.0,
+              "q75": 27.5
+            },
+            "training_time": {
+              "count": 3,
+              "mean": 25.188868013516313,
+              "std": 4.777935822593984,
+              "median": 24.245032112888488,
+              "min": 19.86640192134954,
+              "max": 31.45517000631091,
+              "q25": 22.055717017119015,
+              "q75": 27.8501010595997
+            }
+          },
+          "configuration_analysis": {}
+        },
+        "correlation_analysis": {
+          "parameter_correlations": {}
+        },
+        "hypothesis_tests": {},
+        "pattern_detection": {
+          "temporal_trends": {},
+          "configuration_clusters": {},
+          "performance_outliers": {},
+          "convergence_patterns": {}
+        },
+        "recommendations": [],
+        "future_directions": [
+          "Investigate quantum advantage at larger problem scales",
+          "Implement noise-aware circuit design for NISQ devices",
+          "Explore hybrid quantum-classical optimization strategies",
+          "Develop problem-specific quantum feature encodings",
+          "Study quantum expressivity bounds for PK/PD modeling",
+          "Expand quantum VQC experimental dataset for robust statistical analysis"
+        ]
+      },
+      "analysis_time": 0.006231784820556641
+    },
+    "dosing_optimization": {
+      "scenarios_optimized": 4,
+      "successful_optimizations": 4,
+      "dosing_results": {
+        "Q1_standard_population": {
+          "scenario": {
+            "name": "Q1_standard_population",
+            "description": "Daily dosing for standard population (50-100 kg)",
+            "weight_range": [
+              50,
+              100
+            ],
+            "target_biomarker": 3.3,
+            "population_coverage": 0.9,
+            "concomitant_allowed": true
+          },
+          "optimal_dose": 10.0,
+          "achieved_coverage": 1.0,
+          "optimization_success": true,
+          "safety_margin": 1.0,
+          "dose_range": [
+            10.0,
+            20.0,
+            30.0,
+            40.0,
+            50.0,
+            60.0,
+            70.0,
+            80.0,
+            90.0,
+            100.0,
+            110.0,
+            120.0,
+            130.0,
+            140.0,
+            150.0,
+            160.0,
+            170.0,
+            180.0,
+            190.0,
+            200.0
+          ]
+        },
+        "Q3_extended_population": {
+          "scenario": {
+            "name": "Q3_extended_population",
+            "description": "Daily dosing for extended weight range (70-140 kg)",
+            "weight_range": [
+              70,
+              140
+            ],
+            "target_biomarker": 3.3,
+            "population_coverage": 0.9,
+            "concomitant_allowed": true
+          },
+          "optimal_dose": 10.0,
+          "achieved_coverage": 1.0,
+          "optimization_success": true,
+          "safety_margin": 1.0,
+          "dose_range": [
+            10.0,
+            20.0,
+            30.0,
+            40.0,
+            50.0,
+            60.0,
+            70.0,
+            80.0,
+            90.0,
+            100.0,
+            110.0,
+            120.0,
+            130.0,
+            140.0,
+            150.0,
+            160.0,
+            170.0,
+            180.0,
+            190.0,
+            200.0
+          ]
+        },
+        "Q4_no_concomitant": {
+          "scenario": {
+            "name": "Q4_no_concomitant",
+            "description": "Daily dosing without concomitant medication",
+            "weight_range": [
+              50,
+              100
+            ],
+            "target_biomarker": 3.3,
+            "population_coverage": 0.9,
+            "concomitant_allowed": false
+          },
+          "optimal_dose": 10.0,
+          "achieved_coverage": 1.0,
+          "optimization_success": true,
+          "safety_margin": 1.0,
+          "dose_range": [
+            10.0,
+            20.0,
+            30.0,
+            40.0,
+            50.0,
+            60.0,
+            70.0,
+            80.0,
+            90.0,
+            100.0,
+            110.0,
+            120.0,
+            130.0,
+            140.0,
+            150.0,
+            160.0,
+            170.0,
+            180.0,
+            190.0,
+            200.0
+          ]
+        },
+        "Q5_alternative_coverage": {
+          "scenario": {
+            "name": "Q5_alternative_coverage",
+            "description": "Daily dosing targeting 75% population coverage",
+            "weight_range": [
+              50,
+              100
+            ],
+            "target_biomarker": 3.3,
+            "population_coverage": 0.75,
+            "concomitant_allowed": true
+          },
+          "optimal_dose": 10.0,
+          "achieved_coverage": 1.0,
+          "optimization_success": true,
+          "safety_margin": 1.0,
+          "dose_range": [
+            10.0,
+            20.0,
+            30.0,
+            40.0,
+            50.0,
+            60.0,
+            70.0,
+            80.0,
+            90.0,
+            100.0,
+            110.0,
+            120.0,
+            130.0,
+            140.0,
+            150.0,
+            160.0,
+            170.0,
+            180.0,
+            190.0,
+            200.0
+          ]
+        }
+      },
+      "optimization_time": 104.59702181816101
+    }
+  },
+  "timings": {
+    "data_loading": 0.005819082260131836,
+    "demo": 35.46703886985779,
+    "validation": 73.71509885787964,
+    "noise_analysis": 55.355735063552856,
+    "hyperparameter_optimization": 4669.844664096832,
+    "scientific_analysis": 0.006400108337402344,
+    "dosing_optimization": 104.5973789691925,
+    "total_experiment": 4938.992861032486
+  },
+  "errors": [
+    "Validation experiment error: The truth value of an array with more than one element is ambiguous. Use a.any() or a.all()",
+    "Noise analysis error: The truth value of an array with more than one element is ambiguous. Use a.any() or a.all()",
+    "HPO error: 'RandomSearchOptimizer' object has no attribute '_validate_best_hyperparameters'"
+  ],
+  "total_experiment_time": 9877.984996080399
+}

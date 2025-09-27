@@ -13,8 +13,8 @@ from dataclasses import dataclass
 @dataclass
 class ModelConfig:
     """Configuration for quantum PK/PD models"""
-    n_qubits: int = 8
-    n_layers: int = 4
+    n_qubits: int = 4  # Reduced from 8 to mitigate barren plateaus
+    n_layers: int = 2  # Reduced from 4 to avoid gradient vanishing
     learning_rate: float = 0.01
     max_iterations: int = 100
     convergence_threshold: float = 1e-6
@@ -34,9 +34,62 @@ class PKPDData:
     
     @classmethod
     def from_dataframe(cls, df: pd.DataFrame) -> 'PKPDData':
-        """Create PKPDData from EstData.csv DataFrame"""
-        # Placeholder - will be implemented
-        pass
+        """Create PKPDData from EstData.csv DataFrame
+
+        Args:
+            df: DataFrame with columns ID, BW, COMED, DOSE, TIME, DV, EVID, MDV, AMT, CMT, DVID
+
+        Returns:
+            PKPDData object with structured arrays
+        """
+        # Extract unique subject IDs
+        subjects = df['ID'].unique()
+
+        # Extract time points (all unique times across subjects)
+        time_points = np.sort(df['TIME'].unique())
+
+        # Initialize arrays
+        n_subjects = len(subjects)
+        n_times = len(time_points)
+
+        pk_concentrations = np.zeros((n_subjects, n_times))
+        pd_biomarkers = np.zeros((n_subjects, n_times))
+        doses = np.zeros(n_subjects)
+        body_weights = np.zeros(n_subjects)
+        concomitant_meds = np.zeros(n_subjects)
+
+        for i, subject_id in enumerate(subjects):
+            subject_data = df[df['ID'] == subject_id]
+
+            # Extract subject-specific data
+            body_weights[i] = subject_data['BW'].iloc[0]
+            concomitant_meds[i] = subject_data['COMED'].iloc[0]
+
+            # Get dosing information (from EVID=1 records)
+            dose_records = subject_data[subject_data['EVID'] == 1]
+            if not dose_records.empty:
+                doses[i] = dose_records['AMT'].sum()  # Total dose
+
+            # Map concentrations and biomarkers to time grid
+            for _, row in subject_data.iterrows():
+                time_idx = np.where(time_points == row['TIME'])[0]
+                if len(time_idx) > 0:
+                    idx = time_idx[0]
+                    if row['EVID'] == 0 and row['MDV'] == 0:  # Observation record
+                        if row['CMT'] == 2:  # PK compartment
+                            pk_concentrations[i, idx] = row['DV']
+                        elif row['CMT'] == 3:  # PD compartment
+                            pd_biomarkers[i, idx] = row['DV']
+
+        return cls(
+            subjects=subjects,
+            time_points=time_points,
+            pk_concentrations=pk_concentrations,
+            pd_biomarkers=pd_biomarkers,
+            doses=doses,
+            body_weights=body_weights,
+            concomitant_meds=concomitant_meds
+        )
 
 
 @dataclass
@@ -115,25 +168,53 @@ class QuantumPKPDBase(ABC):
         self.is_trained = True
         return self
         
-    def evaluate_population_coverage(self, 
+    def evaluate_population_coverage(self,
                                    dose: float,
                                    dosing_interval: float,
                                    population_params: Dict[str, np.ndarray],
                                    threshold: float = 3.3) -> float:
         """
         Evaluate what percentage of population achieves biomarker suppression
-        
+
         Args:
             dose: Dose amount (mg)
-            dosing_interval: 24h (daily) or 168h (weekly) 
+            dosing_interval: 24h (daily) or 168h (weekly)
             population_params: Dictionary of population parameter distributions
             threshold: Biomarker threshold (3.3 ng/mL)
-            
+
         Returns:
             Fraction of population achieving target suppression
         """
-        # Placeholder - will be implemented by each approach
-        pass
+        if not self.is_trained:
+            raise ValueError("Model must be trained before evaluating population coverage")
+
+        n_simulations = len(population_params.get('body_weight', [100]))
+        below_threshold_count = 0
+
+        # Generate time points for steady-state evaluation
+        time_points = np.linspace(0, dosing_interval, int(dosing_interval))
+
+        for i in range(n_simulations):
+            # Extract individual covariates
+            covariates = {
+                'body_weight': population_params.get('body_weight', [70])[i % len(population_params.get('body_weight', [70]))],
+                'concomitant_med': population_params.get('concomitant_med', [0])[i % len(population_params.get('concomitant_med', [0]))]
+            }
+
+            try:
+                # Predict biomarker response for this individual
+                biomarker_response = self.predict_biomarker(dose, time_points, covariates)
+
+                # Check if minimum biomarker level is below threshold
+                min_biomarker = np.min(biomarker_response)
+                if min_biomarker <= threshold:
+                    below_threshold_count += 1
+
+            except Exception:
+                # If prediction fails, assume this individual doesn't achieve target
+                continue
+
+        return below_threshold_count / n_simulations
         
     def generate_report(self) -> Dict[str, Any]:
         """Generate comprehensive results report"""

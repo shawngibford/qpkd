@@ -1,0 +1,63 @@
+{
+  "scenarios_optimized": 4,
+  "successful_optimizations": 0,
+  "dosing_results": {
+    "Q1_standard_population": {
+      "scenario": {
+        "name": "Q1_standard_population",
+        "description": "Daily dosing for standard population (50-100 kg)",
+        "weight_range": [
+          50,
+          100
+        ],
+        "target_biomarker": 3.3,
+        "population_coverage": 0.9,
+        "concomitant_allowed": true
+      },
+      "error": "DosingOptimizer.optimize_population_dosing() got an unexpected keyword argument 'concomitant_prevalence'"
+    },
+    "Q3_extended_population": {
+      "scenario": {
+        "name": "Q3_extended_population",
+        "description": "Daily dosing for extended weight range (70-140 kg)",
+        "weight_range": [
+          70,
+          140
+        ],
+        "target_biomarker": 3.3,
+        "population_coverage": 0.9,
+        "concomitant_allowed": true
+      },
+      "error": "DosingOptimizer.optimize_population_dosing() got an unexpected keyword argument 'concomitant_prevalence'"
+    },
+    "Q4_no_concomitant": {
+      "scenario": {
+        "name": "Q4_no_concomitant",
+        "description": "Daily dosing without concomitant medication",
+        "weight_range": [
+          50,
+          100
+        ],
+        "target_biomarker": 3.3,
+        "population_coverage": 0.9,
+        "concomitant_allowed": false
+      },
+      "error": "DosingOptimizer.optimize_population_dosing() got an unexpected keyword argument 'concomitant_prevalence'"
+    },
+    "Q5_alternative_coverage": {
+      "scenario": {
+        "name": "Q5_alternative_coverage",
+        "description": "Daily dosing targeting 75% population coverage",
+        "weight_range": [
+          50,
+          100
+        ],
+        "target_biomarker": 3.3,
+        "population_coverage": 0.75,
+        "concomitant_allowed": true
+      },
+      "error": "DosingOptimizer.optimize_population_dosing() got an unexpected keyword argument 'concomitant_prevalence'"
+    }
+  },
+  "optimization_time": 114.11272668838501
+}

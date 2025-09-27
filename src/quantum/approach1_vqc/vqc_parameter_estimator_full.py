@@ -70,13 +70,13 @@ class ArrayUtils:
 @dataclass
 class VQCHyperparameters:
     """Hyperparameters for VQC optimization"""
-    learning_rate: float = 0.01
-    n_layers: int = 4
+    learning_rate: float = 0.02  # Slightly higher for faster convergence
+    n_layers: int = 2  # Reduced to mitigate barren plateaus
     ansatz_type: str = "strongly_entangling"
-    feature_map: str = "angle_encoding"
-    optimizer_type: str = "adam"
+    feature_map: str = "amplitude_encoding"  # Better than angle encoding
+    optimizer_type: str = "adam"  # Adam for now (QNG needs structural changes)
     regularization_strength: float = 0.01
-    batch_size: int = 32
+    batch_size: int = 16  # Smaller batch size for better gradient flow
     early_stopping_patience: int = 20
     gradient_clipping: float = 1.0
 
@@ -179,7 +179,7 @@ class VQCParameterEstimatorFull(QuantumPKPDBase):
         """Build optimized VQC using PennyLane templates and best practices"""
         try:
             @qml.transforms.broadcast_expand  # Enable proper broadcasting
-            @qml.qnode(self.device, interface="autograd", diff_method="parameter-shift")
+            @qml.qnode(self.device, interface="autograd", diff_method="adjoint")
             def vqc_circuit(params, features, measure_all=False):
                 """
                 Variational Quantum Circuit using PennyLane templates
@@ -205,27 +205,41 @@ class VQCParameterEstimatorFull(QuantumPKPDBase):
                                          wires=range(max_qubits_for_amplitude), 
                                          pad_with=0.0, normalize=True)
                 
-                # Variational ansatz using PennyLane templates
-                if self.vqc_config.hyperparams.ansatz_type == "strongly_entangling":
-                    # Ensure params has correct shape for StronglyEntanglingLayers
+                # Hardware-efficient ansatz to prevent barren plateaus
+                if self.vqc_config.hyperparams.ansatz_type == "hardware_efficient":
+                    # Single RY rotation per qubit per layer (not 3 rotations)
+                    weights_shape = (n_layers, n_qubits)
+                    weights = math.reshape(params, weights_shape)
+
+                    for layer in range(n_layers):
+                        # Single rotation per qubit
+                        for qubit in range(n_qubits):
+                            qml.RY(weights[layer, qubit], wires=qubit)
+
+                        # Local entanglement only (nearest neighbor)
+                        for qubit in range(n_qubits - 1):
+                            qml.CNOT(wires=[qubit, qubit + 1])
+
+                elif self.vqc_config.hyperparams.ansatz_type == "strongly_entangling":
+                    # Legacy support - but use smaller parameter space
                     weights_shape = (n_layers, n_qubits, 3)
                     weights = math.reshape(params, weights_shape)
                     qml.StronglyEntanglingLayers(weights=weights, wires=range(n_qubits))
-                    
+
                 elif self.vqc_config.hyperparams.ansatz_type == "basic_entangling":
                     weights_shape = (n_layers, n_qubits)
                     weights = math.reshape(params, weights_shape)
                     qml.BasicEntanglerLayers(weights=weights, wires=range(n_qubits))
-                    
+
                 elif self.vqc_config.hyperparams.ansatz_type == "simplified_two_design":
                     qml.SimplifiedTwoDesign(params, wires=range(n_qubits))
                 
-                # Measurements
+                # Local measurements to prevent barren plateaus
                 if measure_all:
                     return [qml.expval(qml.PauliZ(i)) for i in range(n_qubits)]
                 else:
-                    # Return subset for parameter mapping  
-                    return [qml.expval(qml.PauliZ(i)) for i in range(min(8, n_qubits))]
+                    # Use only first 3 qubits for local measurements
+                    return [qml.expval(qml.PauliZ(i)) for i in range(min(3, n_qubits))]
             
             # Compile circuit if requested
             if self.vqc_config.circuit_compilation:
@@ -270,16 +284,27 @@ class VQCParameterEstimatorFull(QuantumPKPDBase):
             # Convert to interface-agnostic array using PennyLane math
             features_array = math.array(features_array, dtype=float)
             
-            # Robust scaling using sklearn (external dependency)
-            from sklearn.preprocessing import RobustScaler
-            scaler = RobustScaler()
-            scaled_features = scaler.fit_transform(np.asarray(features_array))
-            
+            # Quantum-specific normalization for amplitude encoding
+            features_np = np.asarray(features_array)
+
+            # Min-max normalization to [0, 1], then L2 normalization for amplitude encoding
+            min_vals = np.min(features_np, axis=0)
+            max_vals = np.max(features_np, axis=0)
+            # Avoid division by zero
+            ranges = np.where(max_vals - min_vals > 1e-8, max_vals - min_vals, 1.0)
+            normalized_features = (features_np - min_vals) / ranges
+
+            # L2 normalization for amplitude encoding (row-wise)
+            row_norms = np.linalg.norm(normalized_features, axis=1, keepdims=True)
+            row_norms = np.where(row_norms > 1e-8, row_norms, 1.0)  # Avoid division by zero
+            scaled_features = normalized_features / row_norms
+
             # Convert back to PennyLane math array for consistency
             scaled_features = math.array(scaled_features)
-            
-            # Store scaler for later use
-            self.feature_scaler = scaler
+
+            # Store normalization parameters for later use
+            self.feature_min_vals = min_vals
+            self.feature_max_vals = max_vals
             
             n_samples = math.shape(scaled_features)[0]
             n_features = math.shape(scaled_features)[1] 
@@ -1014,27 +1039,36 @@ class VQCParameterEstimatorFull(QuantumPKPDBase):
         return train_data, val_data
     
     def _initialize_parameters(self) -> np.ndarray:
-        """Initialize parameters based on ansatz type"""
-        if self.vqc_config.hyperparams.ansatz_type == "strongly_entangling":
+        """Initialize parameters based on ansatz type with depth-aware scaling"""
+        if self.vqc_config.hyperparams.ansatz_type == "hardware_efficient":
+            # Single rotation per qubit per layer
+            shape = (self.vqc_config.hyperparams.n_layers, self.config.n_qubits)
+        elif self.vqc_config.hyperparams.ansatz_type == "strongly_entangling":
             shape = (self.vqc_config.hyperparams.n_layers, self.config.n_qubits, 3)
         elif self.vqc_config.hyperparams.ansatz_type == "basic_entangling":
             shape = (self.vqc_config.hyperparams.n_layers, self.config.n_qubits)
         else:
             shape = (self.config.n_qubits * self.vqc_config.hyperparams.n_layers,)
-            
-        # Xavier/Glorot initialization
-        fan_in = np.prod(shape[:-1]) if len(shape) > 1 else 1
-        fan_out = shape[-1] if len(shape) > 1 else shape[0]
-        limit = np.sqrt(6.0 / (fan_in + fan_out))
-        
-        return np.random.uniform(-limit, limit, shape)
+
+        # Depth-aware parameter initialization to prevent barren plateaus
+        # Variance inversely proportional to circuit depth (research-based)
+        depth_factor = self.vqc_config.hyperparams.n_layers
+        variance = 0.01 / max(1, depth_factor)  # Much smaller initialization
+
+        # Additional scaling for hardware-efficient ansatz
+        if self.vqc_config.hyperparams.ansatz_type == "hardware_efficient":
+            variance = variance / 2.0  # Even smaller for single-rotation ansatz
+
+        return np.random.normal(0, np.sqrt(variance), shape)
     
     def _get_optimizer(self):
         """Get PennyLane optimizer"""
         optimizer_type = self.vqc_config.hyperparams.optimizer_type
         lr = self.vqc_config.hyperparams.learning_rate
         
-        if optimizer_type == "adam":
+        if optimizer_type == "qng":
+            return qml.QNGOptimizer(stepsize=lr)  # Quantum Natural Gradient
+        elif optimizer_type == "adam":
             return qml.AdamOptimizer(stepsize=lr)
         elif optimizer_type == "adagrad":
             return qml.AdagradOptimizer(stepsize=lr)

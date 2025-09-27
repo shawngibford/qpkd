@@ -1,0 +1,60 @@
+{
+  "summary_statistics": {
+    "experiment_count": 3,
+    "approaches": {
+      "quantum_vqc": 3
+    },
+    "performance_metrics": {
+      "convergence_iterations": {
+        "count": 3,
+        "mean": 27.0,
+        "std": 2.160246899469287,
+        "median": 28.0,
+        "min": 24,
+        "max": 29,
+        "q25": 26.0,
+        "q75": 28.5
+      },
+      "training_time": {
+        "count": 3,
+        "mean": 30.928998355974503,
+        "std": 6.377465964314334,
+        "median": 32.712800217929825,
+        "min": 22.380620011920698,
+        "max": 37.69357483807299,
+        "q25": 27.54671011492526,
+        "q75": 35.20318752800141
+      },
+      "accuracy": {
+        "count": 3,
+        "mean": 0.7801558135893732,
+        "std": 0.04014858677713055,
+        "median": 0.7908222540475663,
+        "min": 0.7265262807032524,
+        "max": 0.8231189060173009,
+        "q25": 0.7586742673754094,
+        "q75": 0.8069705800324336
+      }
+    },
+    "configuration_analysis": {}
+  },
+  "correlation_analysis": {
+    "parameter_correlations": {}
+  },
+  "hypothesis_tests": {},
+  "pattern_detection": {
+    "temporal_trends": {},
+    "configuration_clusters": {},
+    "performance_outliers": {},
+    "convergence_patterns": {}
+  },
+  "recommendations": [],
+  "future_directions": [
+    "Investigate quantum advantage at larger problem scales",
+    "Implement noise-aware circuit design for NISQ devices",
+    "Explore hybrid quantum-classical optimization strategies",
+    "Develop problem-specific quantum feature encodings",
+    "Study quantum expressivity bounds for PK/PD modeling",
+    "Expand quantum VQC experimental dataset for robust statistical analysis"
+  ]
+}

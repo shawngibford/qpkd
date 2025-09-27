@@ -1,0 +1,26 @@
+{
+  "training_completed": true,
+  "final_cost": 50.00934909811351,
+  "training_iterations": 3,
+  "validation_predictions": 0,
+  "circuit_info": {
+    "n_qubits": 3,
+    "n_layers": 2,
+    "ansatz": "strongly_entangling",
+    "encoding": "amplitude",
+    "param_shape": [
+      2,
+      3,
+      3
+    ],
+    "total_params": 18,
+    "device": "<default.qubit device (wires=3) at 0x1389c4910>",
+    "diff_method": "adjoint",
+    "encoding_optimization": false,
+    "feature_importance_analysis": false,
+    "encoding_comparison": false,
+    "expressivity_benchmarking": false,
+    "performance_analysis": false
+  },
+  "training_time": 2.6153249740600586
+}

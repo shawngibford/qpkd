@@ -1,0 +1,49 @@
+VQCdd Experimental Results Report
+==================================================
+Experiment ID: vqcdd_20250923_203325
+Timestamp: 2025-09-23 20:36:51
+Total Runtime: 412.00 seconds
+
+Configuration:
+  Mode: all
+  Data Source: synthetic
+  Patients: 100
+  Quantum Circuit: 4 qubits, 2 layers
+  Ansatz: ry_cnot
+  Encoding: angle
+
+Results Summary:
+  data_loading: ✗ FAILED (0.01s)
+  demo: ✓ SUCCESS (36.11s)
+  validation: ✗ FAILED (0.00s)
+  noise_analysis: ✗ FAILED (55.76s)
+  hyperparameter_optimization: ✗ FAILED (0.00s)
+  scientific_analysis: ✗ FAILED (0.00s)
+  dosing_optimization: ✓ SUCCESS (114.11s)
+  total_experiment: ✗ FAILED (206.00s)
+
+Errors Encountered:
+  • Validation experiment error: 'StudyData' object has no attribute 'study_metadata'
+  • Noise analysis error: 'QuantumFeatureEncoder' object has no attribute 'encode_patient'
+  • HPO error: optimize_vqc_hyperparameters() got an unexpected keyword argument 'validation_data'
+  • Analysis error: 'count'
+
+DEMO RESULTS:
+------------------------------
+  training_completed: True
+  final_cost: 50.00453405558597
+  training_iterations: 10
+  validation_predictions: 10
+  circuit_info: {'n_qubits': 4, 'n_layers': 2, 'ansatz': 'ry_cnot', 'encoding': 'angle', 'param_shape': (2, 4), 'total_params': 8, 'device': '<default.qubit device (wires=4) at 0x137226a90>', 'diff_method': 'adjoint', 'encoding_optimization': False, 'feature_importance_analysis': False, 'encoding_comparison': False, 'expressivity_benchmarking': False, 'performance_analysis': False}
+  training_time: 36.111390829086304
+
+DOSING_OPTIMIZATION RESULTS:
+------------------------------
+  scenarios_optimized: 4
+  successful_optimizations: 0
+  dosing_results: {'Q1_standard_population': {'scenario': {'name': 'Q1_standard_population', 'description': 'Daily dosing for standard population (50-100 kg)', 'weight_range': (50, 100), 'target_biomarker': 3.3, 'population_coverage': 0.9, 'concomitant_allowed': True}, 'error': "DosingOptimizer.optimize_population_dosing() got an unexpected keyword argument 'concomitant_prevalence'"}, 'Q3_extended_population': {'scenario': {'name': 'Q3_extended_population', 'description': 'Daily dosing for extended weight range (70-140 kg)', 'weight_range': (70, 140), 'target_biomarker': 3.3, 'population_coverage': 0.9, 'concomitant_allowed': True}, 'error': "DosingOptimizer.optimize_population_dosing() got an unexpected keyword argument 'concomitant_prevalence'"}, 'Q4_no_concomitant': {'scenario': {'name': 'Q4_no_concomitant', 'description': 'Daily dosing without concomitant medication', 'weight_range': (50, 100), 'target_biomarker': 3.3, 'population_coverage': 0.9, 'concomitant_allowed': False}, 'error': "DosingOptimizer.optimize_population_dosing() got an unexpected keyword argument 'concomitant_prevalence'"}, 'Q5_alternative_coverage': {'scenario': {'name': 'Q5_alternative_coverage', 'description': 'Daily dosing targeting 75% population coverage', 'weight_range': (50, 100), 'target_biomarker': 3.3, 'population_coverage': 0.75, 'concomitant_allowed': True}, 'error': "DosingOptimizer.optimize_population_dosing() got an unexpected keyword argument 'concomitant_prevalence'"}}
+  optimization_time: 114.11272668838501
+
+==================================================
+Report generation complete.
+Full results saved to: results/vqcdd_20250923_203325

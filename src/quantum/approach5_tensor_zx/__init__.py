@@ -13,12 +13,12 @@ Key Features:
 
 from .tensor_population_model import TensorPopulationModel
 from .tensor_population_model_full import TensorPopulationModelFull
-# from .zx_circuit_optimizer import ZXCircuitOptimizer  # Missing file
-# from .mps_parameter_sampler import MPSParameterSampler  # Missing file
+from .zx_circuit_optimizer import ZXCircuitOptimizer
+from .mps_parameter_sampler import MPSParameterSampler
 
 __all__ = [
     'TensorPopulationModel',
     'TensorPopulationModelFull',
-    # 'ZXCircuitOptimizer',
-    # 'MPSParameterSampler'
+    'ZXCircuitOptimizer',
+    'MPSParameterSampler'
 ]

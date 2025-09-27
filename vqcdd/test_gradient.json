@@ -1,0 +1,23 @@
+{
+  "gradient_history": [],
+  "magnitude_history": [
+    5.0,
+    3.14,
+    [
+      1.0,
+      2.0
+    ],
+    null
+  ],
+  "variance_history": [],
+  "health_scores": [],
+  "param_update_history": [],
+  "param_norm_history": [],
+  "config": {
+    "barren_threshold": 1e-06,
+    "variance_window": 10,
+    "health_threshold": 0.3,
+    "reinit_patience": 5
+  },
+  "summary": "{'status': 'No gradient data available'}"
+}

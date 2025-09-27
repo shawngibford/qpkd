@@ -1,0 +1,40 @@
+{
+  "experiment_id": "vqcdd_20250923_164621",
+  "timestamp": "2025-09-23T16:46:27.423901",
+  "configuration": {
+    "mode": "demo",
+    "data_source": "synthetic",
+    "output_dir": "results",
+    "verbose": true,
+    "debug": false,
+    "parallel": false,
+    "seed": 42,
+    "n_patients": 10,
+    "test_fraction": 0.2,
+    "validation_fraction": 0.2,
+    "n_qubits": 4,
+    "n_layers": 2,
+    "ansatz": "ry_cnot",
+    "encoding": "angle",
+    "max_iterations": 5,
+    "learning_rate": 0.01,
+    "optimizer_type": "adam",
+    "noise_level": "low",
+    "hpo_n_calls": 20,
+    "hpo_method": "bayesian",
+    "compare_classical": false,
+    "generate_report": false,
+    "save_models": false,
+    "comprehensive": false
+  },
+  "results": {},
+  "timings": {
+    "data_loading": 0.0011363029479980469,
+    "demo": 6.001627206802368,
+    "total_experiment": 6.00333309173584
+  },
+  "errors": [
+    "Demo experiment error: 'VQCTrainer' object has no attribute 'optimization_history'"
+  ],
+  "total_experiment_time": 12.006096601486206
+}

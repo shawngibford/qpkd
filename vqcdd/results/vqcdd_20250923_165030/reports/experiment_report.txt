@@ -1,0 +1,31 @@
+VQCdd Experimental Results Report
+==================================================
+Experiment ID: vqcdd_20250923_165030
+Timestamp: 2025-09-23 16:50:36
+Total Runtime: 12.61 seconds
+
+Configuration:
+  Mode: demo
+  Data Source: synthetic
+  Patients: 10
+  Quantum Circuit: 4 qubits, 2 layers
+  Ansatz: ry_cnot
+  Encoding: angle
+
+Results Summary:
+  data_loading: ✗ FAILED (0.00s)
+  demo: ✓ SUCCESS (6.30s)
+  total_experiment: ✗ FAILED (6.30s)
+
+DEMO RESULTS:
+------------------------------
+  training_completed: True
+  final_cost: 50.00595525907078
+  training_iterations: 5
+  validation_predictions: 1
+  circuit_info: {'n_qubits': 4, 'n_layers': 2, 'ansatz': 'ry_cnot', 'encoding': 'angle', 'param_shape': (2, 4), 'total_params': 8, 'device': '<default.qubit device (wires=4) at 0x140f26f50>', 'diff_method': 'adjoint', 'encoding_optimization': False, 'feature_importance_analysis': False, 'encoding_comparison': False, 'expressivity_benchmarking': False, 'performance_analysis': False}
+  training_time: 6.301048040390015
+
+==================================================
+Report generation complete.
+Full results saved to: results/vqcdd_20250923_165030

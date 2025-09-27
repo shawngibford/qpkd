@@ -1,0 +1,64 @@
+{
+  "experiment_id": "vqcdd_20250924_140407",
+  "timestamp": "2025-09-24T14:04:42.666479",
+  "configuration": {
+    "mode": "demo",
+    "data_source": "synthetic",
+    "output_dir": "results",
+    "verbose": false,
+    "debug": true,
+    "parallel": false,
+    "seed": 42,
+    "n_patients": 100,
+    "test_fraction": 0.2,
+    "validation_fraction": 0.2,
+    "n_qubits": 4,
+    "n_layers": 2,
+    "ansatz": "ry_cnot",
+    "encoding": "angle",
+    "max_iterations": 50,
+    "learning_rate": 0.01,
+    "optimizer_type": "adam",
+    "noise_level": "low",
+    "hpo_n_calls": 20,
+    "hpo_method": "bayesian",
+    "compare_classical": false,
+    "generate_report": false,
+    "save_models": false,
+    "comprehensive": false
+  },
+  "results": {
+    "demo": {
+      "training_completed": true,
+      "final_cost": 50.00453405558597,
+      "training_iterations": 10,
+      "validation_predictions": 10,
+      "circuit_info": {
+        "n_qubits": 4,
+        "n_layers": 2,
+        "ansatz": "ry_cnot",
+        "encoding": "angle",
+        "param_shape": [
+          2,
+          4
+        ],
+        "total_params": 8,
+        "device": "<default.qubit device (wires=4) at 0x16862b090>",
+        "diff_method": "adjoint",
+        "encoding_optimization": false,
+        "feature_importance_analysis": false,
+        "encoding_comparison": false,
+        "expressivity_benchmarking": false,
+        "performance_analysis": false
+      },
+      "training_time": 34.733834981918335
+    }
+  },
+  "timings": {
+    "data_loading": 0.00755000114440918,
+    "demo": 34.734192848205566,
+    "total_experiment": 34.74229097366333
+  },
+  "errors": [],
+  "total_experiment_time": 69.4840338230133
+}

@@ -1,0 +1,17 @@
+{
+  "source": "synthetic",
+  "total_patients": 10,
+  "train_patients": 7,
+  "validation_patients": 1,
+  "test_patients": 2,
+  "population_characteristics": {
+    "n_patients": 10,
+    "weight_mean": 66.950050098955,
+    "weight_std": 10.296310263016926,
+    "weight_range": [
+      50.253079192310935,
+      86.30456668613309
+    ],
+    "concomitant_med_prevalence": 0.3
+  }
+}

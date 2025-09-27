@@ -12,11 +12,11 @@ Key Features:
 """
 
 from .quantum_ode_solver import QuantumODESolver
-# from .pkpd_system_solver import PKPDSystemSolver  # Missing file
-# from .quantum_sensitivity_analysis import QuantumSensitivityAnalyzer  # Missing file
+from .pkpd_system_solver import PKPDSystemSolver
+from .quantum_sensitivity_analysis import QuantumSensitivityAnalyzer
 
 __all__ = [
     'QuantumODESolver',
-    # 'PKPDSystemSolver',
-    # 'QuantumSensitivityAnalyzer'
+    'PKPDSystemSolver',
+    'QuantumSensitivityAnalyzer'
 ]

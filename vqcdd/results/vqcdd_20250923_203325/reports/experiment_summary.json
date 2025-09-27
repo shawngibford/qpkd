@@ -1,0 +1,137 @@
+{
+  "experiment_id": "vqcdd_20250923_203325",
+  "timestamp": "2025-09-23T20:36:51.752261",
+  "configuration": {
+    "mode": "all",
+    "data_source": "synthetic",
+    "output_dir": "results",
+    "verbose": false,
+    "debug": true,
+    "parallel": false,
+    "seed": 42,
+    "n_patients": 100,
+    "test_fraction": 0.2,
+    "validation_fraction": 0.2,
+    "n_qubits": 4,
+    "n_layers": 2,
+    "ansatz": "ry_cnot",
+    "encoding": "angle",
+    "max_iterations": 50,
+    "learning_rate": 0.01,
+    "optimizer_type": "adam",
+    "noise_level": "low",
+    "hpo_n_calls": 20,
+    "hpo_method": "bayesian",
+    "compare_classical": false,
+    "generate_report": false,
+    "save_models": false,
+    "comprehensive": true
+  },
+  "results": {
+    "demo": {
+      "training_completed": true,
+      "final_cost": 50.00453405558597,
+      "training_iterations": 10,
+      "validation_predictions": 10,
+      "circuit_info": {
+        "n_qubits": 4,
+        "n_layers": 2,
+        "ansatz": "ry_cnot",
+        "encoding": "angle",
+        "param_shape": [
+          2,
+          4
+        ],
+        "total_params": 8,
+        "device": "<default.qubit device (wires=4) at 0x137226a90>",
+        "diff_method": "adjoint",
+        "encoding_optimization": false,
+        "feature_importance_analysis": false,
+        "encoding_comparison": false,
+        "expressivity_benchmarking": false,
+        "performance_analysis": false
+      },
+      "training_time": 36.111390829086304
+    },
+    "dosing_optimization": {
+      "scenarios_optimized": 4,
+      "successful_optimizations": 0,
+      "dosing_results": {
+        "Q1_standard_population": {
+          "scenario": {
+            "name": "Q1_standard_population",
+            "description": "Daily dosing for standard population (50-100 kg)",
+            "weight_range": [
+              50,
+              100
+            ],
+            "target_biomarker": 3.3,
+            "population_coverage": 0.9,
+            "concomitant_allowed": true
+          },
+          "error": "DosingOptimizer.optimize_population_dosing() got an unexpected keyword argument 'concomitant_prevalence'"
+        },
+        "Q3_extended_population": {
+          "scenario": {
+            "name": "Q3_extended_population",
+            "description": "Daily dosing for extended weight range (70-140 kg)",
+            "weight_range": [
+              70,
+              140
+            ],
+            "target_biomarker": 3.3,
+            "population_coverage": 0.9,
+            "concomitant_allowed": true
+          },
+          "error": "DosingOptimizer.optimize_population_dosing() got an unexpected keyword argument 'concomitant_prevalence'"
+        },
+        "Q4_no_concomitant": {
+          "scenario": {
+            "name": "Q4_no_concomitant",
+            "description": "Daily dosing without concomitant medication",
+            "weight_range": [
+              50,
+              100
+            ],
+            "target_biomarker": 3.3,
+            "population_coverage": 0.9,
+            "concomitant_allowed": false
+          },
+          "error": "DosingOptimizer.optimize_population_dosing() got an unexpected keyword argument 'concomitant_prevalence'"
+        },
+        "Q5_alternative_coverage": {
+          "scenario": {
+            "name": "Q5_alternative_coverage",
+            "description": "Daily dosing targeting 75% population coverage",
+            "weight_range": [
+              50,
+              100
+            ],
+            "target_biomarker": 3.3,
+            "population_coverage": 0.75,
+            "concomitant_allowed": true
+          },
+          "error": "DosingOptimizer.optimize_population_dosing() got an unexpected keyword argument 'concomitant_prevalence'"
+        }
+      },
+      "optimization_time": 114.11272668838501
+    }
+  },
+  "timings": {
+    "data_loading": 0.005549907684326172,
+    "demo": 36.11186408996582,
+    "validation": 0.0015740394592285156,
+    "noise_analysis": 55.76137614250183,
+    "hyperparameter_optimization": 0.0002148151397705078,
+    "scientific_analysis": 0.003952980041503906,
+    "dosing_optimization": 114.11308073997498,
+    "total_experiment": 205.99836015701294
+  },
+  "errors": [
+    "Validation experiment error: 'StudyData' object has no attribute 'study_metadata'",
+    "Noise analysis error: 'QuantumFeatureEncoder' object has no attribute 'encode_patient'",
+    "HPO error: optimize_vqc_hyperparameters() got an unexpected keyword argument 'validation_data'",
+    "Analysis error: 'count'"
+  ],
+  "total_experiment_time": 411.9959728717804
+}

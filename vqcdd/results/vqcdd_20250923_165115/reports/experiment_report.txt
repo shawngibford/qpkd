@@ -1,0 +1,31 @@
+VQCdd Experimental Results Report
+==================================================
+Experiment ID: vqcdd_20250923_165115
+Timestamp: 2025-09-23 16:51:18
+Total Runtime: 5.23 seconds
+
+Configuration:
+  Mode: demo
+  Data Source: synthetic
+  Patients: 5
+  Quantum Circuit: 3 qubits, 2 layers
+  Ansatz: strongly_entangling
+  Encoding: amplitude
+
+Results Summary:
+  data_loading: ✗ FAILED (0.00s)
+  demo: ✓ SUCCESS (2.62s)
+  total_experiment: ✗ FAILED (2.62s)
+
+DEMO RESULTS:
+------------------------------
+  training_completed: True
+  final_cost: 50.00934909811351
+  training_iterations: 3
+  validation_predictions: 0
+  circuit_info: {'n_qubits': 3, 'n_layers': 2, 'ansatz': 'strongly_entangling', 'encoding': 'amplitude', 'param_shape': (2, 3, 3), 'total_params': 18, 'device': '<default.qubit device (wires=3) at 0x1389c4910>', 'diff_method': 'adjoint', 'encoding_optimization': False, 'feature_importance_analysis': False, 'encoding_comparison': False, 'expressivity_benchmarking': False, 'performance_analysis': False}
+  training_time: 2.6153249740600586
+
+==================================================
+Report generation complete.
+Full results saved to: results/vqcdd_20250923_165115

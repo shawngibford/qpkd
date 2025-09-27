@@ -1,0 +1,138 @@
+{
+  "summary_statistics": {
+    "experiment_count": 10,
+    "approaches": {
+      "quantum_vqc": 5,
+      "classical_ml": 5
+    },
+    "performance_metrics": {
+      "convergence_iterations": {
+        "count": 10,
+        "mean": 39.6,
+        "std": 11.02905254316979,
+        "median": 35.5,
+        "min": 27,
+        "max": 58,
+        "q25": 30.25,
+        "q75": 49.5
+      },
+      "accuracy": {
+        "count": 10,
+        "mean": 0.8525324798005135,
+        "std": 0.04907875215599303,
+        "median": 0.8473926230383824,
+        "min": 0.7904244168349508,
+        "max": 0.9533706686165719,
+        "q25": 0.8202106185242081,
+        "q75": 0.8662580706374846
+      },
+      "training_time": {
+        "count": 10,
+        "mean": 90.72722025460605,
+        "std": 42.348600758548585,
+        "median": 90.44594987042544,
+        "min": 34.489592686630274,
+        "max": 155.22626069181302,
+        "q25": 50.850674370557506,
+        "q75": 130.69099372631737
+      }
+    },
+    "configuration_analysis": {}
+  },
+  "correlation_analysis": {
+    "parameter_correlations": {
+      "n_qubits": {
+        "correlation": NaN,
+        "p_value": NaN,
+        "significant": false
+      },
+      "n_layers": {
+        "correlation": NaN,
+        "p_value": NaN,
+        "significant": false
+      },
+      "learning_rate": {
+        "correlation": NaN,
+        "p_value": NaN,
+        "significant": false
+      },
+      "n_estimators": {
+        "correlation": NaN,
+        "p_value": NaN,
+        "significant": false
+      },
+      "max_depth": {
+        "correlation": NaN,
+        "p_value": NaN,
+        "significant": false
+      }
+    },
+    "strongest_positive": [
+      "n_qubits",
+      {
+        "correlation": NaN,
+        "p_value": NaN,
+        "significant": false
+      }
+    ],
+    "strongest_negative": [
+      "n_qubits",
+      {
+        "correlation": NaN,
+        "p_value": NaN,
+        "significant": false
+      }
+    ]
+  },
+  "hypothesis_tests": {
+    "approach_difference_test": {
+      "test": "Kruskal-Wallis",
+      "statistic": 5.770909090909086,
+      "p_value": 0.016293603621028576,
+      "significant": true,
+      "interpretation": "Approaches have significantly different performance"
+    },
+    "normality_test": {
+      "test": "Shapiro-Wilk",
+      "statistic": 0.9295062347930364,
+      "p_value": 0.44305305484451457,
+      "normal": true,
+      "interpretation": "Performance distribution is normal"
+    }
+  },
+  "pattern_detection": {
+    "temporal_trends": {
+      "correlation": -0.5100031815518126,
+      "p_value": 0.1320660876212376,
+      "trend": "no_trend"
+    },
+    "configuration_clusters": {},
+    "performance_outliers": {
+      "count": 1,
+      "outliers": [
+        {
+          "experiment_id": "quantum_exp_4",
+          "performance": 0.9533706686165719,
+          "type": "high"
+        }
+      ],
+      "bounds": {
+        "lower": 0.7511394403542933,
+        "upper": 0.9353292488073994
+      }
+    },
+    "convergence_patterns": {}
+  },
+  "recommendations": [
+    "Significant performance differences detected between approaches - investigate specific configurations that drive these differences",
+    "Identified 1 performance outliers - investigate configurations that lead to exceptional performance"
+  ],
+  "future_directions": [
+    "Investigate quantum advantage at larger problem scales",
+    "Implement noise-aware circuit design for NISQ devices",
+    "Explore hybrid quantum-classical optimization strategies",
+    "Develop problem-specific quantum feature encodings",
+    "Study quantum expressivity bounds for PK/PD modeling",
+    "Expand quantum VQC experimental dataset for robust statistical analysis"
+  ]
+}

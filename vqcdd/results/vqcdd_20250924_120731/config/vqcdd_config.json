@@ -1,0 +1,97 @@
+{
+  "memory": {
+    "gradient_history_size": 50,
+    "cost_history_size": 1000,
+    "performance_history_size": 200,
+    "evaluation_history_size": 500,
+    "gradient_magnitude_history_size": 200,
+    "training_history_size": 200,
+    "depth_adjustment_history_size": 100
+  },
+  "validation": {
+    "imax_warning_threshold": 0.95,
+    "ka_range": [
+      0.01,
+      20.0
+    ],
+    "cl_range": [
+      0.1,
+      100.0
+    ],
+    "v1_range": [
+      1.0,
+      200.0
+    ],
+    "elimination_rate_max": 10.0,
+    "half_life_range": [
+      0.1,
+      100.0
+    ],
+    "imax_range": [
+      0.0,
+      1.0
+    ],
+    "gamma_range": [
+      0.1,
+      10.0
+    ],
+    "body_weight_range": [
+      30.0,
+      200.0
+    ],
+    "body_weight_ratio_range": [
+      0.1,
+      5.0
+    ]
+  },
+  "optimization": {
+    "default_max_iterations": 50,
+    "default_early_stopping_patience": 10,
+    "default_convergence_threshold": 0.0001,
+    "min_improvement_threshold": 1e-05,
+    "barren_plateau_threshold": 1e-06,
+    "gradient_health_threshold": 0.3,
+    "default_dose_range": [
+      1.0,
+      100.0
+    ],
+    "dose_tolerance_factor": 0.1,
+    "target_tolerance_base": 0.3
+  },
+  "circuit": {
+    "default_n_qubits": 4,
+    "default_n_layers": 2,
+    "min_layers": 1,
+    "max_layers": 10,
+    "expressivity_threshold": 0.5,
+    "default_encoding_scaling": 1.0,
+    "max_encoding_range": 6.28318
+  },
+  "analytics": {
+    "default_confidence_level": 0.95,
+    "significance_threshold": 0.05,
+    "bootstrap_samples": 1000,
+    "default_dpi": 300,
+    "default_figsize": [
+      12,
+      8
+    ],
+    "quantum_advantage_threshold": 0.05,
+    "substantial_improvement_threshold": 0.1
+  },
+  "data": {
+    "standard_weight_range": [
+      50.0,
+      100.0
+    ],
+    "extended_weight_range": [
+      70.0,
+      140.0
+    ],
+    "default_target_biomarker": 3.3,
+    "target_coverage_default": 0.9,
+    "target_coverage_alternative": 0.75,
+    "min_data_points": 3,
+    "outlier_iqr_factor": 1.5
+  }
+}

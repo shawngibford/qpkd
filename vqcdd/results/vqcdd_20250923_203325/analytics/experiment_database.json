@@ -1,0 +1,125 @@
+[
+  {
+    "experiment_id": "quantum_ry_cnot_0",
+    "timestamp": "2025-09-23T20:34:57.635616",
+    "approach": "quantum_vqc",
+    "configuration": {
+      "n_qubits": 4,
+      "n_layers": 2,
+      "ansatz": "ry_cnot",
+      "learning_rate": 0.01
+    },
+    "metrics": {
+      "accuracy": 0.7265262807032524,
+      "training_time": 32.712800217929825,
+      "convergence_iterations": 24
+    },
+    "raw_data": {
+      "cost_history": [
+        1.0,
+        0.95,
+        0.9,
+        0.85,
+        0.8,
+        0.75,
+        0.7,
+        0.6499999999999999,
+        0.6,
+        0.55,
+        0.5,
+        0.44999999999999996,
+        0.3999999999999999,
+        0.35,
+        0.29999999999999993,
+        0.25,
+        0.19999999999999996,
+        0.1499999999999999,
+        0.09999999999999998,
+        0.04999999999999993
+      ]
+    },
+    "metadata": {}
+  },
+  {
+    "experiment_id": "quantum_strongly_entangling_1",
+    "timestamp": "2025-09-23T20:34:57.635858",
+    "approach": "quantum_vqc",
+    "configuration": {
+      "n_qubits": 4,
+      "n_layers": 2,
+      "ansatz": "strongly_entangling",
+      "learning_rate": 0.01
+    },
+    "metrics": {
+      "accuracy": 0.8231189060173009,
+      "training_time": 37.69357483807299,
+      "convergence_iterations": 28
+    },
+    "raw_data": {
+      "cost_history": [
+        1.0,
+        0.95,
+        0.9,
+        0.85,
+        0.8,
+        0.75,
+        0.7,
+        0.6499999999999999,
+        0.6,
+        0.55,
+        0.5,
+        0.44999999999999996,
+        0.3999999999999999,
+        0.35,
+        0.29999999999999993,
+        0.25,
+        0.19999999999999996,
+        0.1499999999999999,
+        0.09999999999999998,
+        0.04999999999999993
+      ]
+    },
+    "metadata": {}
+  },
+  {
+    "experiment_id": "quantum_hardware_efficient_2",
+    "timestamp": "2025-09-23T20:34:57.636404",
+    "approach": "quantum_vqc",
+    "configuration": {
+      "n_qubits": 4,
+      "n_layers": 2,
+      "ansatz": "hardware_efficient",
+      "learning_rate": 0.01
+    },
+    "metrics": {
+      "accuracy": 0.7908222540475663,
+      "training_time": 22.380620011920698,
+      "convergence_iterations": 29
+    },
+    "raw_data": {
+      "cost_history": [
+        1.0,
+        0.95,
+        0.9,
+        0.85,
+        0.8,
+        0.75,
+        0.7,
+        0.6499999999999999,
+        0.6,
+        0.55,
+        0.5,
+        0.44999999999999996,
+        0.3999999999999999,
+        0.35,
+        0.29999999999999993,
+        0.25,
+        0.19999999999999996,
+        0.1499999999999999,
+        0.09999999999999998,
+        0.04999999999999993
+      ]
+    },
+    "metadata": {}
+  }
+]

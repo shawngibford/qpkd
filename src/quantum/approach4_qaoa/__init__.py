@@ -13,10 +13,10 @@ Key Features:
 
 from .qubo_formulator import QUBOFormulator
 from .multi_objective_optimizer_full import MultiObjectiveOptimizerFull
-# from .population_scenario_analyzer import PopulationScenarioAnalyzer  # Missing file
+from .population_scenario_analyzer import PopulationScenarioAnalyzer
 
 __all__ = [
     'QUBOFormulator',
     'MultiObjectiveOptimizerFull',
-    # 'PopulationScenarioAnalyzer'
+    'PopulationScenarioAnalyzer'
 ]
