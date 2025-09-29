@@ -1,0 +1,1 @@
+Log-scale GOF highlights relative errors across orders of magnitude.

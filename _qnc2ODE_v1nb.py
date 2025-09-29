@@ -13,6 +13,9 @@ import warnings
 warnings.filterwarnings('ignore')
 import pennylane as qml
 import time
+import os
+from pathlib import Path
+from datetime import datetime
 from qnc2 import (
     VariationalPKPDAnsatz,
     DEFAULT_PK_BOUNDS,
@@ -26,7 +29,8 @@ from qnc2 import (
 
 
 # Set device and random seeds
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# For PennyLane default.qubit with Torch backprop, keep everything on CPU to preserve gradients
+device = torch.device('cpu')
 torch.manual_seed(42)
 np.random.seed(42)
 print(f"Using device: {device}")
@@ -253,7 +257,9 @@ class TorchQNC2Adapter(nn.Module):
         self.register_buffer("_sizes", torch.tensor(sizes, dtype=torch.long))
         self.register_buffer("_offsets", torch.tensor(offsets, dtype=torch.long))
         total = int(sum(sizes))
-        self.theta = nn.Parameter(torch.randn(total, dtype=torch.float32) * 0.1)
+        # Keep theta on CPU to maintain compatibility with PennyLane default.qubit
+        self.theta = nn.Parameter(torch.randn(total, dtype=torch.float32) * 0.1, requires_grad=True)
+        self.theta.data = self.theta.data.cpu()
 
         @qml.qnode(self.dev, interface="torch", diff_method="backprop")
         def qnode(inputs, flat_theta):
@@ -261,7 +267,9 @@ class TorchQNC2Adapter(nn.Module):
             for k, shape, off, size in zip(self._keys, self._shapes, self._offsets.tolist(), self._sizes.tolist()):
                 sl = flat_theta[off:off+size]
                 wdict[k] = sl.view(*shape)
-            return self._run_circuit(inputs, wdict)
+            # Return list of expvals like in qnc.py; we'll stack in forward
+            expvals = self._run_circuit(inputs, wdict)
+            return expvals
 
         self.qnode = qnode
 
@@ -306,11 +314,18 @@ class TorchQNC2Adapter(nn.Module):
         return [qml.expval(qml.PauliZ(w)) for w in (PK_WIRES + PD_WIRES)]
 
     def forward(self, subject_ids: torch.Tensor, covariates: torch.Tensor, dose_intensities: torch.Tensor):
-        inputs = torch.cat([covariates, dose_intensities.unsqueeze(1)], dim=1)
+        # Ensure inputs on CPU to match PennyLane device
+        inputs = torch.cat([covariates, dose_intensities.unsqueeze(1)], dim=1).to('cpu', dtype=torch.float32)
         outs = []
         for b in range(inputs.shape[0]):
-            outs.append(self.qnode(inputs[b], self.theta))
-        raw = torch.stack(outs, dim=0)  # [B,9] in [-1,1]
+            x_cpu = inputs[b]
+            # Use CPU-resident theta directly to preserve gradients
+            o = self.qnode(x_cpu, self.theta)
+            # Mirror qnc.py behavior: if list/tuple of expvals, stack to torch tensor
+            if isinstance(o, (list, tuple)):
+                o = torch.stack(o)
+            outs.append(o)
+        raw = torch.stack(outs, dim=0)  # [B,9] in [-1,1], CPU tensor
 
         pk_bounds = torch.tensor(DEFAULT_PK_BOUNDS, dtype=torch.float32, device=raw.device)
         pd_bounds = torch.tensor(DEFAULT_PD_BOUNDS, dtype=torch.float32, device=raw.device)
@@ -321,6 +336,12 @@ class TorchQNC2Adapter(nn.Module):
 
     def parameter_count(self) -> int:
         return int(self.theta.numel())
+
+    # Ensure external .to(device) calls do not move theta off CPU
+    def to(self, *args, **kwargs):
+        super().to(*args, **kwargs)
+        self.theta.data = self.theta.data.cpu()
+        return self
 
 
 
@@ -525,8 +546,9 @@ class DiscreteDosePKPDModel(nn.Module):
             # 6b: Store pre-dose state
             solution_dict[float(dose_time)] = current_state.clone()
             
-            # 6c: Add discrete dose to depot compartment
-            current_state[0] += dose_amount  # Instantaneous dose addition
+            # 6c: Add discrete dose to depot compartment (functional to preserve autograd)
+            dose_vec = torch.tensor([dose_amount, 0.0, 0.0, 0.0], dtype=current_state.dtype, device=self.device)
+            current_state = current_state + dose_vec  # Instantaneous dose addition
             current_time = dose_time
             
             # 6d: Store post-dose state (same time, different state)
@@ -551,32 +573,25 @@ class DiscreteDosePKPDModel(nn.Module):
                 print(f"Final integration failed: {e}")
                 solution_dict[float(max_time)] = current_state
         
-        # Step 8: Extract solutions at requested simulation_times via interpolation
-        output_solution = torch.zeros(len(simulation_times), 4, device=self.device)
-        
-        # Get all available time points in order
+        # Step 8: Extract solutions at requested simulation_times via interpolation (differentiable)
+        # Build a list and stack to preserve autograd, avoiding in-place writes.
         available_times = sorted(solution_dict.keys())
-        
-        for i, req_time in enumerate(simulation_times):
+        outputs = []
+        for req_time in simulation_times:
             t = float(req_time)
-            
             if t in solution_dict:
-                # Exact time point available
-                output_solution[i] = solution_dict[t]
+                outputs.append(solution_dict[t])
             else:
-                # Linear interpolation between nearest points
                 t_before = max([time for time in available_times if time <= t], default=available_times[0])
                 t_after = min([time for time in available_times if time >= t], default=available_times[-1])
-                
                 if t_before == t_after:
-                    output_solution[i] = solution_dict[t_before]
+                    outputs.append(solution_dict[t_before])
                 else:
-                    # Linear interpolation
                     alpha = (t - t_before) / (t_after - t_before)
                     state_before = solution_dict[t_before]
                     state_after = solution_dict[t_after]
-                    output_solution[i] = (1 - alpha) * state_before + alpha * state_after
-        
+                    outputs.append((1 - alpha) * state_before + alpha * state_after)
+        output_solution = torch.stack(outputs, dim=0)
         return output_solution, pk_params, pd_params
 
 
@@ -813,9 +828,16 @@ class DiscretePKPDTrainer:
             
         except Exception as e:
             print(f"Simulation failed for subject {subject_id}: {e}")
+            # Print traceback to locate the exact source of the numpy() call
+            try:
+                import traceback
+                traceback.print_exc()
+            except Exception:
+                pass
             return torch.tensor(100.0, device=self.device)
         
-        total_loss = 0.0
+        # Accumulate as a Tensor to preserve autograd
+        total_loss = torch.tensor(0.0, device=self.device)
         n_terms = 0
         
         # PK loss (log scale) - if PK data available
@@ -1055,7 +1077,7 @@ class DiscretePKPDTrainer:
                         concentrations = solution[:, 1] / Vc
                         pred_conc = torch_interp(pk_times, sim_times, concentrations)
                         
-                        pk_predictions.extend(pred_conc.numpy())
+                        pk_predictions.extend(pred_conc.detach().cpu().tolist())
                         pk_observations.extend(subject_data['pk_data']['DV'].values)
                     
                     # PD validation
@@ -1064,7 +1086,7 @@ class DiscretePKPDTrainer:
                         biomarkers = solution[:, 3]
                         pred_biomarker = torch_interp(pd_times, sim_times, biomarkers)
                         
-                        pd_predictions.extend(pred_biomarker.numpy())
+                        pd_predictions.extend(pred_biomarker.detach().cpu().tolist())
                         pd_observations.extend(subject_data['pd_data']['DV'].values)
                     
                 except Exception as e:
@@ -1402,6 +1424,237 @@ class DiscreteDoseOptimizer:
 
 
 # ============================================================================
+# SECTION 6: REPORTING & EVALUATION HELPERS
+# ============================================================================
+def _make_run_dirs(label: str) -> dict:
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    base = Path('results') / f'run_{ts}' / label
+    paths = {
+        'base': base,
+        'figures': base / 'figures',
+        'tables': base / 'tables',
+        'metrics': base / 'metrics',
+        'logs': base / 'logs',
+    }
+    for p in paths.values():
+        p.mkdir(parents=True, exist_ok=True)
+    return paths
+
+
+def _save_fig(fig, out_path: Path, caption: str = ""):
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_path, dpi=200, bbox_inches='tight')
+    plt.close(fig)
+    if caption:
+        cap_path = out_path.with_suffix('.txt')
+        cap_path.write_text(caption)
+
+
+def _save_table(df: pd.DataFrame, csv_path: Path, html_path: Path, caption: str = ""):
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(csv_path, index=False)
+    html = df.to_html(index=False)
+    if caption:
+        html += f"<p><em>{caption}</em></p>"
+    html_path.write_text(html)
+
+
+def _compute_pk_metrics(times: np.ndarray, conc: np.ndarray) -> dict:
+    if len(times) == 0:
+        return {k: np.nan for k in ['Cmax','Tmax','AUC0_last']}
+    cmax = float(np.max(conc))
+    tmax = float(times[np.argmax(conc)])
+    auc = float(np.trapz(conc, times))
+    return {'Cmax': cmax, 'Tmax': tmax, 'AUC0_last': auc}
+
+
+def _compute_pd_metrics(times: np.ndarray, biomarker: np.ndarray, baseline: float) -> dict:
+    if len(times) == 0:
+        return {k: np.nan for k in ['Baseline','Nadir','T_nadir','AUEC0_last','MinPctChange','MaxPctChange']}
+    nadir = float(np.min(biomarker))
+    t_nadir = float(times[np.argmin(biomarker)])
+    auec = float(np.trapz(biomarker, times))
+    with np.errstate(divide='ignore', invalid='ignore'):
+        denom = baseline if baseline != 0 else 1.0
+        pct_change = 100.0 * (biomarker - baseline) / denom
+    return {
+        'Baseline': float(baseline),
+        'Nadir': nadir,
+        'T_nadir': t_nadir,
+        'AUEC0_last': auec,
+        'MinPctChange': float(np.nanmin(pct_change)),
+        'MaxPctChange': float(np.nanmax(pct_change)),
+    }
+
+
+def _plot_loss_curves(train_losses: list, val_losses: list, out_dir: Path):
+    import csv
+    rows = [(i+1, float(tr), float(va)) for i, (tr, va) in enumerate(zip(train_losses, val_losses))]
+    csv_path = out_dir / 'loss_curves.csv'
+    with csv_path.open('w', newline='') as f:
+        w = csv.writer(f)
+        w.writerow(['epoch','train_loss','val_loss'])
+        w.writerows(rows)
+    # Linear
+    fig, ax = plt.subplots(figsize=(8,5))
+    ax.plot(range(1, len(train_losses)+1), train_losses, label='Train', color='C0')
+    ax.plot(range(1, len(val_losses)+1), val_losses, label='Val', color='C1')
+    ax.set_xlabel('Epoch'); ax.set_ylabel('Loss'); ax.set_title('Learning Curves (Linear)')
+    ax.grid(True, alpha=0.3); ax.legend()
+    _save_fig(fig, out_dir / 'loss_curves_linear.png', caption='How to read: Blue=training, Orange=validation; lower is better. Compare trends for overfitting.')
+    # Log
+    fig, ax = plt.subplots(figsize=(8,5))
+    ax.plot(range(1, len(train_losses)+1), train_losses, label='Train', color='C0')
+    ax.plot(range(1, len(val_losses)+1), val_losses, label='Val', color='C1')
+    ax.set_yscale('log'); ax.set_xlabel('Epoch'); ax.set_ylabel('Loss (log)'); ax.set_title('Learning Curves (Log)')
+    ax.grid(True, alpha=0.3, which='both'); ax.legend()
+    _save_fig(fig, out_dir / 'loss_curves_log.png', caption='Same as linear plot but logarithmic y-axis to highlight early improvements.')
+
+
+def evaluate_and_report(trainer: DiscretePKPDTrainer, model: DiscreteDosePKPDModel, dp: DataProcessor, run_paths: dict, label: str):
+    _plot_loss_curves(trainer.train_losses, trainer.val_losses, run_paths['metrics'])
+
+    pk_obs_all, pk_pred_all = [], []
+    pd_obs_all, pd_pred_all = [], []
+    subject_rows = []
+
+    for subject_id in dp.subject_info['ID']:
+        subj = dp.get_subject_data(subject_id)
+        dosing = subj['dosing_data']
+        if len(dosing) == 0:
+            continue
+        covariates = subj['covariates']
+        dose_schedule = [(float(r['TIME']), float(r['AMT'])) for _, r in dosing.iterrows()]
+
+        obs_times = []
+        if len(subj['pk_data']) > 0:
+            obs_times += subj['pk_data']['TIME'].tolist()
+        if len(subj['pd_data']) > 0:
+            obs_times += subj['pd_data']['TIME'].tolist()
+        if not obs_times:
+            continue
+        t_min = max(0.0, float(np.min(obs_times)))
+        t_max = float(np.max(obs_times))
+        dense = np.linspace(t_min, t_max, 300, dtype=np.float32)
+        sim_times = torch.tensor(dense, dtype=torch.float32, device=model.device)
+        baseline = trainer.get_baseline_biomarker(subject_id)
+
+        try:
+            solution, pk_params, pd_params = model.simulate_subject_discrete(subject_id, covariates, dose_schedule, sim_times, baseline)
+        except Exception as e:
+            print(f"Eval failed for subject {subject_id}: {e}")
+            continue
+
+        conc_pred = (solution[:,1] / pk_params[2]).detach().cpu().numpy()
+        times_np = sim_times.detach().cpu().numpy()
+        biomarker_pred = solution[:,3].detach().cpu().numpy()
+
+        if len(subj['pk_data']) > 0:
+            pk_times = np.asarray(subj['pk_data']['TIME'].values, dtype=float)
+            pk_obs = np.asarray(subj['pk_data']['DV'].values, dtype=float)
+            pk_pred_at_obs = np.interp(pk_times, times_np, conc_pred)
+            pk_obs_all.extend(pk_obs.tolist()); pk_pred_all.extend(pk_pred_at_obs.tolist())
+        else:
+            pk_times, pk_obs = np.array([]), np.array([])
+
+        if len(subj['pd_data']) > 0:
+            pd_times = np.asarray(subj['pd_data']['TIME'].values, dtype=float)
+            pd_obs = np.asarray(subj['pd_data']['DV'].values, dtype=float)
+            pd_pred_at_obs = np.interp(pd_times, times_np, biomarker_pred)
+            pd_obs_all.extend(pd_obs.tolist()); pd_pred_all.extend(pd_pred_at_obs.tolist())
+        else:
+            pd_times, pd_obs = np.array([]), np.array([])
+
+        # PK plots (linear & log)
+        if pk_times.size > 0:
+            fig, ax = plt.subplots(figsize=(8,5))
+            ax.plot(times_np, conc_pred, label='Predicted', color='C0')
+            ax.scatter(pk_times, pk_obs, label='Observed', color='C1', s=20, alpha=0.8)
+            for t, amt in dose_schedule: ax.axvline(t, color='k', linestyle='--', alpha=0.2)
+            ax.set_xlabel('Time (h)'); ax.set_ylabel('Concentration (ng/mL)'); ax.set_title(f'Subject {subject_id} PK (Linear)')
+            ax.legend(); ax.grid(True, alpha=0.3)
+            _save_fig(fig, run_paths['figures']/f'pk_subject_{subject_id}_linear.png', caption='How to read: Line=predicted; points=observed; dashed lines mark doses.')
+
+            fig, ax = plt.subplots(figsize=(8,5))
+            ax.plot(times_np, np.clip(conc_pred, 1e-6, None), label='Predicted', color='C0')
+            ax.scatter(pk_times, np.clip(pk_obs, 1e-6, None), label='Observed', color='C1', s=20, alpha=0.8)
+            for t, amt in dose_schedule: ax.axvline(t, color='k', linestyle='--', alpha=0.2)
+            ax.set_yscale('log'); ax.set_xlabel('Time (h)'); ax.set_ylabel('Concentration (ng/mL, log)'); ax.set_title(f'Subject {subject_id} PK (Log Y)')
+            ax.legend(); ax.grid(True, alpha=0.3, which='both')
+            _save_fig(fig, run_paths['figures']/f'pk_subject_{subject_id}_log.png', caption='Logarithmic y-axis emphasizes early-time dynamics and multiplicative errors.')
+
+        # PD plots (linear & log)
+        if pd_times.size > 0 or biomarker_pred.size > 0:
+            fig, ax = plt.subplots(figsize=(8,5))
+            ax.plot(times_np, biomarker_pred, label='Predicted', color='C2')
+            if pd_times.size > 0: ax.scatter(pd_times, pd_obs, label='Observed', color='C3', s=20, alpha=0.8)
+            for t, amt in dose_schedule: ax.axvline(t, color='k', linestyle='--', alpha=0.2)
+            ax.axhline(baseline, color='gray', linestyle=':', alpha=0.8, label='Baseline')
+            ax.set_xlabel('Time (h)'); ax.set_ylabel('Biomarker (ng/mL)'); ax.set_title(f'Subject {subject_id} PD (Linear)')
+            ax.legend(); ax.grid(True, alpha=0.3)
+            _save_fig(fig, run_paths['figures']/f'pd_subject_{subject_id}_linear.png', caption='How to read: Line=predicted biomarker; points=observed; dotted=baseline; dashed=doses.')
+
+            fig, ax = plt.subplots(figsize=(8,5))
+            ax.plot(times_np, np.clip(biomarker_pred, 1e-6, None), label='Predicted', color='C2')
+            if pd_times.size > 0: ax.scatter(pd_times, np.clip(pd_obs, 1e-6, None), label='Observed', color='C3', s=20, alpha=0.8)
+            for t, amt in dose_schedule: ax.axvline(t, color='k', linestyle='--', alpha=0.2)
+            ax.axhline(max(1e-6, baseline), color='gray', linestyle=':', alpha=0.8, label='Baseline')
+            ax.set_yscale('log'); ax.set_xlabel('Time (h)'); ax.set_ylabel('Biomarker (ng/mL, log)'); ax.set_title(f'Subject {subject_id} PD (Log Y)')
+            ax.legend(); ax.grid(True, alpha=0.3, which='both')
+            _save_fig(fig, run_paths['figures']/f'pd_subject_{subject_id}_log.png', caption='Logarithmic y-axis shows proportional changes from baseline.')
+
+        pk_metrics = _compute_pk_metrics(times_np, conc_pred)
+        pd_metrics = _compute_pd_metrics(times_np, biomarker_pred, baseline)
+        info = dp.subject_info[dp.subject_info['ID']==subject_id].iloc[0]
+        row = {'ID': int(subject_id), 'DOSE': float(info['DOSE']), 'BW': float(info['BW']), 'COMED': int(info['COMED']) if pd.notnull(info['COMED']) else 0}
+        row.update(pk_metrics); row.update(pd_metrics)
+        subject_rows.append(row)
+
+    if subject_rows:
+        df_subj = pd.DataFrame(subject_rows)
+        cap_subj = ('Per-subject dosing response summary. How to read: Each row is a subject; PK metrics include Cmax, Tmax, AUC0-last. '
+                    'PD metrics include Baseline, Nadir, Time-to-Nadir, AUEC0-last, and min/max percent change from baseline.')
+        _save_table(df_subj, run_paths['tables']/ 'dosing_response_per_subject.csv', run_paths['tables']/ 'dosing_response_per_subject.html', cap_subj)
+
+        metric_cols = ['Cmax','Tmax','AUC0_last','Baseline','Nadir','T_nadir','AUEC0_last','MinPctChange','MaxPctChange']
+        agg = df_subj.groupby('DOSE')[metric_cols].agg(['mean','std'])
+        pretty = pd.DataFrame(index=agg.index)
+        for m in metric_cols:
+            mu = agg[(m,'mean')]; sd = agg[(m,'std')]
+            pretty[m] = [f"{a:.2f} ± {b:.2f}" for a,b in zip(mu, sd)]
+        pretty = pretty.reset_index()
+        cap_grp = 'Dose-group aggregated metrics (mean ± SD). Compare rows to assess dose-response.'
+        _save_table(pretty, run_paths['tables']/ 'dosing_response_by_dose.csv', run_paths['tables']/ 'dosing_response_by_dose.html', cap_grp)
+
+    if pk_obs_all and pk_pred_all:
+        pk_obs_arr = np.array(pk_obs_all, dtype=float)
+        pk_pred_arr = np.array(pk_pred_all, dtype=float)
+        # Linear
+        fig, ax = plt.subplots(figsize=(6,6))
+        ax.scatter(pk_obs_arr, pk_pred_arr, alpha=0.5)
+        lo = max(1e-6, np.nanmin([pk_obs_arr.min(), pk_pred_arr.min()])); hi = np.nanmax([pk_obs_arr.max(), pk_pred_arr.max()])
+        ax.plot([lo, hi],[lo, hi],'r--',alpha=0.8)
+        ax.set_xlabel('Observed PK (ng/mL)'); ax.set_ylabel('Predicted PK (ng/mL)'); ax.set_title('PK Goodness-of-Fit (Linear)'); ax.grid(True, alpha=0.3)
+        _save_fig(fig, run_paths['figures']/ 'gof_pk_linear.png', caption='How to read: Points near the dashed line indicate good agreement. Systematic deviations suggest bias.')
+        # Log
+        fig, ax = plt.subplots(figsize=(6,6))
+        ax.scatter(np.clip(pk_obs_arr,1e-6,None), np.clip(pk_pred_arr,1e-6,None), alpha=0.5)
+        ax.set_xscale('log'); ax.set_yscale('log')
+        lo = 1e-6; hi = max(np.nanmax(pk_obs_arr), np.nanmax(pk_pred_arr))
+        ax.plot([lo, hi],[lo, hi],'r--',alpha=0.8)
+        ax.set_xlabel('Observed PK (ng/mL, log)'); ax.set_ylabel('Predicted PK (ng/mL, log)'); ax.set_title('PK Goodness-of-Fit (Log)'); ax.grid(True, alpha=0.3, which='both')
+        _save_fig(fig, run_paths['figures']/ 'gof_pk_log.png', caption='Log-scale GOF highlights relative errors across orders of magnitude.')
+
+    if pd_obs_all and pd_pred_all:
+        pd_obs_arr = np.array(pd_obs_all, dtype=float)
+        pd_pred_arr = np.array(pd_pred_all, dtype=float)
+        fig, ax = plt.subplots(figsize=(6,6))
+        ax.scatter(pd_obs_arr, pd_pred_arr, alpha=0.5, color='green')
+        lo = min(np.nanmin(pd_obs_arr), np.nanmin(pd_pred_arr)); hi = max(np.nanmax(pd_obs_arr), np.nanmax(pd_pred_arr))
+        ax.plot([lo, hi],[lo, hi],'r--',alpha=0.8)
+        ax.set_xlabel('Observed PD (ng/mL)'); ax.set_ylabel('Predicted PD (ng/mL)'); ax.set_title('PD Goodness-of-Fit (Linear)'); ax.grid(True, alpha=0.3)
+        _save_fig(fig, run_paths['figures']/ 'gof_pd_linear.png', caption='How to read: Points near the dashed line indicate good agreement for biomarker predictions.')
+
 # MAIN EXECUTION PIPELINE - DISCRETE DOSING VERSION
 # ============================================================================
 def main_discrete():
@@ -1432,7 +1685,7 @@ def main_discrete():
         
         # Section 4: Training
         trainer = DiscretePKPDTrainer(pkpd_model, data_processor)
-        best_loss = trainer.train_discrete(epochs=100, print_every=1)
+        best_loss = trainer.train_discrete(epochs=20, print_every=1)
         
         if best_loss < 10:  # Only proceed if training was successful
             print(f"✓ Training successful (final loss: {best_loss:.3f})")
@@ -1440,7 +1693,11 @@ def main_discrete():
             print(f"✗ Training failed (loss too high: {best_loss:.3f})")
         # Validate model predictions
         trainer.validate_model_predictions(n_test_subjects=15)
-        
+
+        # Reporting & Evaluation
+        run_paths = _make_run_dirs(label='quantum')
+        evaluate_and_report(trainer, pkpd_model, data_processor, run_paths, label='quantum')
+
         # Section 5: Dose Optimization
         optimizer = DiscreteDoseOptimizer(pkpd_model, trainer)
         results = optimizer.answer_discrete_questions()
@@ -1481,13 +1738,14 @@ def test_discrete_dosing():
     sim_times = torch.linspace(0, 72, 25, device=device)  # 3 days, 25 points
     
     try:
-        solution, pk_params, pd_params = model.simulate_subject_discrete(
-            subject_id, covariates, dose_schedule, sim_times)
+        with torch.no_grad():
+            solution, pk_params, pd_params = model.simulate_subject_discrete(
+                subject_id, covariates, dose_schedule, sim_times)
         
         print(f"✓ Discrete dosing test successful!")
         print(f"  Solution shape: {solution.shape}")
-        print(f"  Final biomarker: {solution[-1, 3]:.3f} ng/mL")
-        print(f"  No NaN values: {not torch.isnan(solution).any()}")
+        print(f"  Final biomarker: {solution[-1, 3].item():.3f} ng/mL")
+        print(f"  No NaN values: {bool((~torch.isnan(solution)).all().item())}")
         
         return True
         

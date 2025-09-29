@@ -1,0 +1,1 @@
+Logarithmic y-axis shows proportional changes from baseline.

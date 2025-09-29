@@ -1,0 +1,1 @@
+Same as linear plot but y-axis is logarithmic to highlight early improvements.

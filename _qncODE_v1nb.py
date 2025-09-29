@@ -13,6 +13,9 @@ from sklearn.model_selection import train_test_split
 import warnings
 warnings.filterwarnings('ignore')
 import time
+import os
+from pathlib import Path
+from datetime import datetime
 
 
 
@@ -1221,6 +1224,285 @@ class DiscreteDoseOptimizer:
 
 
 # ============================================================================
+# SECTION 6: REPORTING & EVALUATION HELPERS
+# ============================================================================
+def _make_run_dirs(label: str) -> dict:
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    base = Path('results') / f'run_{ts}' / label
+    paths = {
+        'base': base,
+        'figures': base / 'figures',
+        'tables': base / 'tables',
+        'metrics': base / 'metrics',
+        'logs': base / 'logs',
+    }
+    for p in paths.values():
+        p.mkdir(parents=True, exist_ok=True)
+    return paths
+
+
+def _save_fig(fig, out_path: Path, caption: str = ""):
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_path, dpi=200, bbox_inches='tight')
+    plt.close(fig)
+    if caption:
+        cap_path = out_path.with_suffix('.txt')
+        cap_path.write_text(caption)
+
+
+def _save_table(df: pd.DataFrame, csv_path: Path, html_path: Path, caption: str = ""):
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(csv_path, index=False)
+    html = df.to_html(index=False)
+    if caption:
+        html += f"<p><em>{caption}</em></p>"
+    html_path.write_text(html)
+
+
+def _compute_pk_metrics(times: np.ndarray, conc: np.ndarray) -> dict:
+    if len(times) == 0:
+        return {k: np.nan for k in ['Cmax','Tmax','AUC0_last']}
+    cmax = float(np.max(conc))
+    tmax = float(times[np.argmax(conc)])
+    auc = float(np.trapz(conc, times))
+    return {'Cmax': cmax, 'Tmax': tmax, 'AUC0_last': auc}
+
+
+def _compute_pd_metrics(times: np.ndarray, biomarker: np.ndarray, baseline: float) -> dict:
+    if len(times) == 0:
+        return {k: np.nan for k in ['Baseline','Nadir','T_nadir','AUEC0_last','MinPctChange','MaxPctChange']}
+    nadir = float(np.min(biomarker))
+    t_nadir = float(times[np.argmin(biomarker)])
+    auec = float(np.trapz(biomarker, times))
+    with np.errstate(divide='ignore', invalid='ignore'):
+        denom = baseline if baseline != 0 else 1.0
+        pct_change = 100.0 * (biomarker - baseline) / denom
+    return {
+        'Baseline': float(baseline),
+        'Nadir': nadir,
+        'T_nadir': t_nadir,
+        'AUEC0_last': auec,
+        'MinPctChange': float(np.nanmin(pct_change)),
+        'MaxPctChange': float(np.nanmax(pct_change)),
+    }
+
+
+def _plot_loss_curves(train_losses: list, val_losses: list, out_dir: Path):
+    import csv
+    rows = [(i+1, float(tr), float(va)) for i, (tr, va) in enumerate(zip(train_losses, val_losses))]
+    csv_path = out_dir / 'loss_curves.csv'
+    with csv_path.open('w', newline='') as f:
+        w = csv.writer(f)
+        w.writerow(['epoch','train_loss','val_loss'])
+        w.writerows(rows)
+    # Linear scale
+    fig, ax = plt.subplots(figsize=(8,5))
+    ax.plot(range(1, len(train_losses)+1), train_losses, label='Train', color='C0')
+    ax.plot(range(1, len(val_losses)+1), val_losses, label='Val', color='C1')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Loss')
+    ax.set_title('Learning Curves (Linear Scale)')
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+    _save_fig(fig, out_dir / 'loss_curves_linear.png', caption='How to read: Blue=training, Orange=validation; lower is better. Compare trends for overfitting.')
+    # Log scale
+    fig, ax = plt.subplots(figsize=(8,5))
+    ax.plot(range(1, len(train_losses)+1), train_losses, label='Train', color='C0')
+    ax.plot(range(1, len(val_losses)+1), val_losses, label='Val', color='C1')
+    ax.set_yscale('log')
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel('Loss (log)')
+    ax.set_title('Learning Curves (Log Scale)')
+    ax.grid(True, alpha=0.3, which='both')
+    ax.legend()
+    _save_fig(fig, out_dir / 'loss_curves_log.png', caption='Same as linear plot but y-axis is logarithmic to highlight early improvements.')
+
+
+def evaluate_and_report(trainer: DiscretePKPDTrainer, model: DiscreteDosePKPDModel, dp: DataProcessor, run_paths: dict, label: str):
+    _plot_loss_curves(trainer.train_losses, trainer.val_losses, run_paths['metrics'])
+
+    pk_obs_all, pk_pred_all = [], []
+    pd_obs_all, pd_pred_all = [], []
+
+    subject_rows = []
+    for subject_id in dp.subject_info['ID']:
+        subj = dp.get_subject_data(subject_id)
+        dosing = subj['dosing_data']
+        if len(dosing) == 0:
+            continue
+        covariates = subj['covariates']
+        dose_schedule = [(float(r['TIME']), float(r['AMT'])) for _, r in dosing.iterrows()]
+
+        obs_times = []
+        if len(subj['pk_data']) > 0:
+            obs_times += subj['pk_data']['TIME'].tolist()
+        if len(subj['pd_data']) > 0:
+            obs_times += subj['pd_data']['TIME'].tolist()
+        if not obs_times:
+            continue
+        t_min = max(0.0, float(np.min(obs_times)))
+        t_max = float(np.max(obs_times))
+        dense = np.linspace(t_min, t_max, 300, dtype=np.float32)
+        sim_times = torch.tensor(dense, dtype=torch.float32, device=model.device)
+        baseline = trainer.get_baseline_biomarker(subject_id)
+
+        try:
+            solution, pk_params, pd_params = model.simulate_subject_discrete(subject_id, covariates, dose_schedule, sim_times, baseline)
+        except Exception as e:
+            print(f"Eval failed for subject {subject_id}: {e}")
+            continue
+
+        conc_pred = (solution[:,1] / pk_params[2]).detach().cpu().numpy()
+        times_np = sim_times.detach().cpu().numpy()
+        biomarker_pred = solution[:,3].detach().cpu().numpy()
+
+        if len(subj['pk_data']) > 0:
+            pk_times = np.asarray(subj['pk_data']['TIME'].values, dtype=float)
+            pk_obs = np.asarray(subj['pk_data']['DV'].values, dtype=float)
+            pk_pred_at_obs = np.interp(pk_times, times_np, conc_pred)
+            pk_obs_all.extend(pk_obs.tolist())
+            pk_pred_all.extend(pk_pred_at_obs.tolist())
+        else:
+            pk_times, pk_obs = np.array([]), np.array([])
+
+        if len(subj['pd_data']) > 0:
+            pd_times = np.asarray(subj['pd_data']['TIME'].values, dtype=float)
+            pd_obs = np.asarray(subj['pd_data']['DV'].values, dtype=float)
+            pd_pred_at_obs = np.interp(pd_times, times_np, biomarker_pred)
+            pd_obs_all.extend(pd_obs.tolist())
+            pd_pred_all.extend(pd_pred_at_obs.tolist())
+        else:
+            pd_times, pd_obs = np.array([]), np.array([])
+
+        if pk_times.size > 0:
+            fig, ax = plt.subplots(figsize=(8,5))
+            ax.plot(times_np, conc_pred, label='Predicted', color='C0')
+            ax.scatter(pk_times, pk_obs, label='Observed', color='C1', s=20, alpha=0.8)
+            for t, amt in dose_schedule:
+                ax.axvline(t, color='k', linestyle='--', alpha=0.2)
+            ax.set_xlabel('Time (h)'); ax.set_ylabel('Concentration (ng/mL)')
+            ax.set_title(f'Subject {subject_id} PK (Linear)')
+            ax.legend(); ax.grid(True, alpha=0.3)
+            _save_fig(fig, run_paths['figures'] / f'pk_subject_{subject_id}_linear.png', caption='How to read: Line=predicted; points=observed; dashed lines mark doses.')
+
+            fig, ax = plt.subplots(figsize=(8,5))
+            ax.plot(times_np, np.clip(conc_pred, 1e-6, None), label='Predicted', color='C0')
+            ax.scatter(pk_times, np.clip(pk_obs, 1e-6, None), label='Observed', color='C1', s=20, alpha=0.8)
+            for t, amt in dose_schedule:
+                ax.axvline(t, color='k', linestyle='--', alpha=0.2)
+            ax.set_yscale('log')
+            ax.set_xlabel('Time (h)'); ax.set_ylabel('Concentration (ng/mL, log)')
+            ax.set_title(f'Subject {subject_id} PK (Log Y)')
+            ax.legend(); ax.grid(True, alpha=0.3, which='both')
+            _save_fig(fig, run_paths['figures'] / f'pk_subject_{subject_id}_log.png', caption='Same as linear PK plot but logarithmic y-axis to emphasize early-time dynamics.')
+
+        if pd_times.size > 0 or biomarker_pred.size > 0:
+            fig, ax = plt.subplots(figsize=(8,5))
+            ax.plot(times_np, biomarker_pred, label='Predicted', color='C2')
+            if pd_times.size > 0:
+                ax.scatter(pd_times, pd_obs, label='Observed', color='C3', s=20, alpha=0.8)
+            for t, amt in dose_schedule:
+                ax.axvline(t, color='k', linestyle='--', alpha=0.2)
+            ax.axhline(baseline, color='gray', linestyle=':', alpha=0.8, label='Baseline')
+            ax.set_xlabel('Time (h)'); ax.set_ylabel('Biomarker (ng/mL)')
+            ax.set_title(f'Subject {subject_id} PD (Linear)')
+            ax.legend(); ax.grid(True, alpha=0.3)
+            _save_fig(fig, run_paths['figures'] / f'pd_subject_{subject_id}_linear.png', caption='How to read: Line=predicted biomarker; points=observed; dotted = baseline; dashed = doses.')
+
+            fig, ax = plt.subplots(figsize=(8,5))
+            ax.plot(times_np, np.clip(biomarker_pred, 1e-6, None), label='Predicted', color='C2')
+            if pd_times.size > 0:
+                ax.scatter(pd_times, np.clip(pd_obs, 1e-6, None), label='Observed', color='C3', s=20, alpha=0.8)
+            for t, amt in dose_schedule:
+                ax.axvline(t, color='k', linestyle='--', alpha=0.2)
+            ax.axhline(max(1e-6, baseline), color='gray', linestyle=':', alpha=0.8, label='Baseline')
+            ax.set_yscale('log')
+            ax.set_xlabel('Time (h)'); ax.set_ylabel('Biomarker (ng/mL, log)')
+            ax.set_title(f'Subject {subject_id} PD (Log Y)')
+            ax.legend(); ax.grid(True, alpha=0.3, which='both')
+            _save_fig(fig, run_paths['figures'] / f'pd_subject_{subject_id}_log.png', caption='Same PD plot with logarithmic y-axis to show proportional changes.')
+
+        pk_metrics = _compute_pk_metrics(times_np, conc_pred)
+        pd_metrics = _compute_pd_metrics(times_np, biomarker_pred, baseline)
+        info = dp.subject_info[dp.subject_info['ID']==subject_id].iloc[0]
+        row = {
+            'ID': int(subject_id),
+            'DOSE': float(info['DOSE']),
+            'BW': float(info['BW']),
+            'COMED': int(info['COMED']) if pd.notnull(info['COMED']) else 0,
+        }
+        row.update(pk_metrics); row.update(pd_metrics)
+        subject_rows.append(row)
+
+    if subject_rows:
+        df_subj = pd.DataFrame(subject_rows)
+        cap_subj = ('Per-subject dosing response summary. How to read: Each row is a subject; PK metrics include Cmax, Tmax, AUC0-last. '
+                    'PD metrics include Baseline, Nadir, Time-to-Nadir, AUEC0-last, and min/max percent change from baseline.')
+        _save_table(df_subj, run_paths['tables']/ 'dosing_response_per_subject.csv', run_paths['tables']/ 'dosing_response_per_subject.html', cap_subj)
+
+        metric_cols = ['Cmax','Tmax','AUC0_last','Baseline','Nadir','T_nadir','AUEC0_last','MinPctChange','MaxPctChange']
+        agg = df_subj.groupby('DOSE')[metric_cols].agg(['mean','std'])
+        pretty = pd.DataFrame(index=agg.index)
+        for m in metric_cols:
+            mu = agg[(m,'mean')]
+            sd = agg[(m,'std')]
+            pretty[m] = [f"{a:.2f} ± {b:.2f}" for a,b in zip(mu, sd)]
+        pretty = pretty.reset_index()
+        cap_grp = 'Dose-group aggregated metrics (mean ± SD). Compare rows to assess dose-response.'
+        _save_table(pretty, run_paths['tables']/ 'dosing_response_by_dose.csv', run_paths['tables']/ 'dosing_response_by_dose.html', cap_grp)
+
+    if pk_obs_all and pk_pred_all:
+        pk_obs_arr = np.array(pk_obs_all, dtype=float)
+        pk_pred_arr = np.array(pk_pred_all, dtype=float)
+        fig, ax = plt.subplots(figsize=(6,6))
+        ax.scatter(pk_obs_arr, pk_pred_arr, alpha=0.5)
+        lo = max(1e-6, np.nanmin([pk_obs_arr.min(), pk_pred_arr.min()]))
+        hi = np.nanmax([pk_obs_arr.max(), pk_pred_arr.max()])
+        ax.plot([lo, hi],[lo, hi],'r--',alpha=0.8)
+        ax.set_xlabel('Observed PK (ng/mL)'); ax.set_ylabel('Predicted PK (ng/mL)')
+        ax.set_title('PK Goodness-of-Fit (Linear)'); ax.grid(True, alpha=0.3)
+        _save_fig(fig, run_paths['figures']/ 'gof_pk_linear.png', caption='How to read: Points near the dashed line indicate good agreement. Systematic deviations suggest bias.')
+
+        fig, ax = plt.subplots(figsize=(6,6))
+        ax.scatter(np.clip(pk_obs_arr,1e-6,None), np.clip(pk_pred_arr,1e-6,None), alpha=0.5)
+        ax.set_xscale('log'); ax.set_yscale('log')
+        lo = 1e-6; hi = max(np.nanmax(pk_obs_arr), np.nanmax(pk_pred_arr))
+        ax.plot([lo, hi],[lo, hi],'r--',alpha=0.8)
+        ax.set_xlabel('Observed PK (ng/mL, log)'); ax.set_ylabel('Predicted PK (ng/mL, log)')
+        ax.set_title('PK Goodness-of-Fit (Log Scale)'); ax.grid(True, alpha=0.3, which='both')
+        _save_fig(fig, run_paths['figures']/ 'gof_pk_log.png', caption='Log-scale GOF highlights relative errors across orders of magnitude.')
+
+    if pd_obs_all and pd_pred_all:
+        pd_obs_arr = np.array(pd_obs_all, dtype=float)
+        pd_pred_arr = np.array(pd_pred_all, dtype=float)
+        fig, ax = plt.subplots(figsize=(6,6))
+        ax.scatter(pd_obs_arr, pd_pred_arr, alpha=0.5, color='green')
+        lo = min(np.nanmin(pd_obs_arr), np.nanmin(pd_pred_arr))
+        hi = max(np.nanmax(pd_obs_arr), np.nanmax(pd_pred_arr))
+        ax.plot([lo, hi],[lo, hi],'r--',alpha=0.8)
+        ax.set_xlabel('Observed PD (ng/mL)'); ax.set_ylabel('Predicted PD (ng/mL)')
+        ax.set_title('PD Goodness-of-Fit (Linear)'); ax.grid(True, alpha=0.3)
+        _save_fig(fig, run_paths['figures']/ 'gof_pd_linear.png', caption='How to read: Points near the dashed line indicate good agreement for biomarker predictions.')
+
+    readme = [
+        '# Results Summary',
+        f"Run label: {label}",
+        '',
+        'Folders:',
+        '- figures/: per-subject PK/PD (linear and log), learning curves, GOF plots.',
+        '- tables/: per-subject and dose-group metrics (CSV, HTML).',
+        '- metrics/: loss_curves.csv and numeric logs.',
+        '',
+        'How to read:',
+        '- Learning curves: Blue=training, Orange=validation. Linear shows overall trends; log emphasizes early epochs.',
+        '- PK/PD overlays: Lines=predictions; points=observations; dashed verticals=doses; dotted horizontal=baseline (PD).',
+        '- GOF: Points near identity line imply better fit. Log-scale PK GOF shows relative errors at low concentrations.',
+        '- Tables: Per-subject metrics detail individual response; dose-group table summarizes mean ± SD.',
+    ]
+    (run_paths['logs']/ 'README.txt').write_text('\n'.join(readme))
+
+
+# ============================================================================
 # MAIN EXECUTION PIPELINE - DISCRETE DOSING VERSION
 # ============================================================================
 def main_discrete():
@@ -1255,7 +1537,7 @@ def main_discrete():
         
         # Section 4: Training
         trainer = DiscretePKPDTrainer(pkpd_model, data_processor)
-        best_loss = trainer.train_discrete(epochs=100, print_every=1)
+        best_loss = trainer.train_discrete(epochs=20, print_every=1)
         
         if best_loss < 10:  # Only proceed if training was successful
             print(f"✓ Training successful (final loss: {best_loss:.3f})")
@@ -1264,6 +1546,10 @@ def main_discrete():
         # Validate model predictions
         trainer.validate_model_predictions(n_test_subjects=15)
         
+        # Reporting & Evaluation
+        run_paths = _make_run_dirs(label='classical')
+        evaluate_and_report(trainer, pkpd_model, data_processor, run_paths, label='classical')
+
         # Section 5: Dose Optimization
         optimizer = DiscreteDoseOptimizer(pkpd_model, trainer)
         results = optimizer.answer_discrete_questions()
